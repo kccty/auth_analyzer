@@ -1,6 +1,5 @@
 package com.protect7.authanalyzer.util;
 
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -108,6 +107,19 @@ public class DataStorageProvider {
 				requestResponse.getStatus() == null ? null : requestResponse.getStatus().name(), requestResponse.getInfoText(),
 				requestResponse.getStatusCode(), requestResponse.getResponseContentLength());
 		saveSessionRequestResponse(sessionName, id, stored);
+	}
+	
+	public static void saveAllStoredMessages() {
+		clearStoredMessages();
+		CurrentConfig config = CurrentConfig.getCurrentConfig();
+		for (OriginalRequestResponse requestResponse : config.getTableModel().getOriginalRequestResponseList()) {
+			saveOriginalRequestResponse(requestResponse);
+		}
+		for (Session session : config.getSessions()) {
+			for (Map.Entry<Integer, AnalyzerRequestResponse> entry : session.getRequestResponseMap().entrySet()) {
+				saveSessionRequestResponse(session.getName(), entry.getKey(), entry.getValue());
+			}
+		}
 	}
 
 	public static void restoreStoredMessages() {
@@ -242,11 +254,6 @@ public class DataStorageProvider {
 	}
 
 	private static void deletePath(String path) {
-		try {
-			BurpExtender.callbacks.excludeFromScope(new URL(HTTPSERVICE.getProtocol(), HTTPSERVICE.getHost(), HTTPSERVICE.getPort(), path));
-		} catch (MalformedURLException e) {
-			// ignore
-		}
 		IHttpRequestResponse[] messages = BurpExtender.callbacks.getSiteMap(HTTPSERVICE.toString() + path);
 		for (IHttpRequestResponse message : messages) {
 			BurpExtender.callbacks.removeFromSiteMap(message);

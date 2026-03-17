@@ -85,6 +85,24 @@ public class RequestTableModel extends AbstractTableModel {
 	}
 	
 	@Override
+	public void setValueAt(Object value, int row, int column) {
+		OriginalRequestResponse requestResponse = getOriginalRequestResponse(row);
+		if (requestResponse == null) {
+			return;
+		}
+		if (Column.Comment.toString().equals(getColumnName(column))) {
+			requestResponse.setComment((String) value);
+			DataStorageProvider.saveOriginalRequestResponse(requestResponse);
+			fireTableCellUpdated(row, column);
+		}
+	}
+	
+	@Override
+	public boolean isCellEditable(int rowIndex, int columnIndex) {
+		return Column.Comment.toString().equals(getColumnName(columnIndex));
+	}
+	
+	@Override
 	public int getColumnCount() {
 		return STATIC_COLUMN_COUNT + (config.getSessions().size()*4);
 	}
