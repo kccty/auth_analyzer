@@ -122,6 +122,14 @@ public class CurrentConfig {
 		return mapId;
 	}
 	
+	public void setMapId(int mapId) {
+		this.mapId = mapId;
+	}
+	
+	public int getMapId() {
+		return mapId;
+	}
+	
 	public void setDropOriginal(boolean dropOriginal) {
 		this.dropOriginal = dropOriginal;
 	}

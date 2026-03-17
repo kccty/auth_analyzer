@@ -18,6 +18,7 @@ import com.protect7.authanalyzer.entities.Token;
 import com.protect7.authanalyzer.entities.TokenPriority;
 import com.protect7.authanalyzer.util.BypassConstants;
 import com.protect7.authanalyzer.util.CurrentConfig;
+import com.protect7.authanalyzer.util.DataStorageProvider;
 import com.protect7.authanalyzer.util.ExtractionHelper;
 import com.protect7.authanalyzer.util.GenericHelper;
 import com.protect7.authanalyzer.util.RequestModifHelper;
@@ -47,6 +48,7 @@ public class RequestController {
 					AnalyzerRequestResponse analyzerRequestResponse = new AnalyzerRequestResponse(
 							null, BypassConstants.NA, "Filtered due to paused session.", -1, -1);
 					session.putRequestResponse(mapId, analyzerRequestResponse);
+					DataStorageProvider.saveSessionRequestResponse(session.getName(), mapId, analyzerRequestResponse);
 					session.getStatusPanel().incrementAmountOfFitleredRequests();
 					isFiltered = true;
 				}
@@ -55,6 +57,7 @@ public class RequestController {
 					AnalyzerRequestResponse analyzerRequestResponse = new AnalyzerRequestResponse(
 							null, BypassConstants.NA, "Filtered due to same header.", -1, -1);
 					session.putRequestResponse(mapId, analyzerRequestResponse);
+					DataStorageProvider.saveSessionRequestResponse(session.getName(), mapId, analyzerRequestResponse);
 					session.getStatusPanel().incrementAmountOfFitleredRequests();
 					isFiltered = true;
 				} 
@@ -62,6 +65,7 @@ public class RequestController {
 					AnalyzerRequestResponse analyzerRequestResponse = new AnalyzerRequestResponse(
 							null, BypassConstants.NA, "Filtered due to scope restriction.", -1, -1);
 					session.putRequestResponse(mapId, analyzerRequestResponse);
+					DataStorageProvider.saveSessionRequestResponse(session.getName(), mapId, analyzerRequestResponse);
 					session.getStatusPanel().incrementAmountOfFitleredRequests();
 					isFiltered = true;
 				} 
@@ -111,18 +115,21 @@ public class RequestController {
 									sessionRequestResponse, bypassConstant, null, sessionResponseInfo.getStatusCode(),
 									sessionRequestResponse.getResponse().length - sessionResponseInfo.getBodyOffset());
 							session.putRequestResponse(mapId, analyzerRequestResponse);
+							DataStorageProvider.saveSessionRequestResponse(session.getName(), mapId, analyzerRequestResponse);
 						}
 						else {
 							AnalyzerRequestResponse analyzerRequestResponse = new AnalyzerRequestResponse(
 									sessionRequestResponse, BypassConstants.NA, null, sessionResponseInfo.getStatusCode(),
 									sessionRequestResponse.getResponse().length - sessionResponseInfo.getBodyOffset());
 							session.putRequestResponse(mapId, analyzerRequestResponse);
+							DataStorageProvider.saveSessionRequestResponse(session.getName(), mapId, analyzerRequestResponse);
 						}
 					} else {
 						AnalyzerRequestResponse analyzerRequestResponse = new AnalyzerRequestResponse(
 								null, BypassConstants.NA, "Session Request / Response is null. Probably no response "
 										+ "received from server.", -1, -1);
 						session.putRequestResponse(mapId, analyzerRequestResponse);
+						DataStorageProvider.saveSessionRequestResponse(session.getName(), mapId, analyzerRequestResponse);
 					}
 				}
 			}
@@ -146,6 +153,7 @@ public class RequestController {
 			OriginalRequestResponse requestResponse = new OriginalRequestResponse(mapId, originalRequestResponse, 
 					originalRequestInfo.getMethod(), url, infoText, originalStatusCode, originalResponseContentLength);
 			CurrentConfig.getCurrentConfig().getTableModel().addNewRequestResponse(requestResponse);		
+			DataStorageProvider.saveOriginalRequestResponse(requestResponse);
 			GenericHelper.animateBurpExtensionTab();
 		}
 	}

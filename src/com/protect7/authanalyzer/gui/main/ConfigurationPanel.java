@@ -253,6 +253,7 @@ public class ConfigurationPanel extends JPanel {
 			String storedData = DataStorageProvider.loadSetup();
 			if(storedData != null) {
 				loadSetup(storedData);
+				DataStorageProvider.restoreStoredMessages();
 				mainPanel.updateDividerLocation();
 			}
 		} catch (Exception e) {

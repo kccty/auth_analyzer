@@ -50,6 +50,11 @@ public class OriginalRequestResponse implements Comparable<OriginalRequestRespon
 	public void setMarked(boolean marked) {
 		this.marked = marked;
 	}
+	
+	public void restoreViewState(String comment, boolean marked) {
+		this.comment = comment;
+		this.marked = marked;
+	}
 	public String getInfoText() {
 		return infoText;
 	}

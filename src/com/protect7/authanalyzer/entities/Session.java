@@ -69,6 +69,10 @@ public class Session {
 	public void clearRequestResponseMap() {
 		requestResponseMap.clear();
 	}
+	
+	public void removeRequestResponse(int key) {
+		requestResponseMap.remove(key);
+	}
 
 	public int getTabbedPaneRequestIndex() {
 		return tabbedPaneRequestIndex;

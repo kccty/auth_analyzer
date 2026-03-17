@@ -5,8 +5,10 @@ import java.util.EnumSet;
 import javax.swing.SwingUtilities;
 import javax.swing.table.AbstractTableModel;
 import com.protect7.authanalyzer.entities.OriginalRequestResponse;
+import com.protect7.authanalyzer.entities.Session;
 import com.protect7.authanalyzer.util.BypassConstants;
 import com.protect7.authanalyzer.util.CurrentConfig;
+import com.protect7.authanalyzer.util.DataStorageProvider;
 
 public class RequestTableModel extends AbstractTableModel {
 
@@ -41,7 +43,15 @@ public class RequestTableModel extends AbstractTableModel {
 	}
 	
 	public void deleteRequestResponse(OriginalRequestResponse requestResponse) {
+		if (requestResponse == null) {
+			return;
+		}
+		int requestId = requestResponse.getId();
 		originalRequestResponseList.remove(requestResponse);
+		for (Session session : config.getSessions()) {
+			session.removeRequestResponse(requestId);
+		}
+		DataStorageProvider.deleteStoredRequestResponse(requestId);
 		SwingUtilities.invokeLater(new Runnable() {			
 			@Override
 			public void run() {
@@ -52,6 +62,7 @@ public class RequestTableModel extends AbstractTableModel {
 	
 	public void clearRequestMap() {
 		originalRequestResponseList.clear();
+		DataStorageProvider.clearStoredMessages();
 		fireTableDataChanged();
 	}
 	
