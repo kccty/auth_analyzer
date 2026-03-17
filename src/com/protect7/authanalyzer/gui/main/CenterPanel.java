@@ -469,6 +469,7 @@ public class CenterPanel extends JPanel {
 		selectedId = -1;
 		diffPane.setText(TEXT_DIFF_VIEW_DEFAULT);
 		splitPane.setResizeWeight(0.5d);
+		refreshTableFilter();
 	}
 
 	public void clearTablePressed() {
@@ -542,14 +543,45 @@ public class CenterPanel extends JPanel {
 		}
 		tablePanel.revalidate();
 	}
-	
-	public void updateAmountOfPendingRequests(int amountOfPendingRequests) {
-		if(amountOfPendingRequests == 0) {
-			pendingRequestsLabel.setVisible(false);
+
+	public void refreshTableFilter() {
+		Runnable refreshTask = new Runnable() {
+			@Override
+			public void run() {
+				if (sorter != null) {
+					sorter.sort();
+				}
+				updateTableFilterInfo();
+				table.revalidate();
+				table.repaint();
+			}
+		};
+		if (SwingUtilities.isEventDispatchThread()) {
+			refreshTask.run();
 		}
 		else {
-			pendingRequestsLabel.setVisible(true);
-			pendingRequestsLabel.setText("Pending Requests Queue: " + amountOfPendingRequests);
+			SwingUtilities.invokeLater(refreshTask);
+		}
+	}
+	
+	public void updateAmountOfPendingRequests(int amountOfPendingRequests) {
+		Runnable updateTask = new Runnable() {
+			@Override
+			public void run() {
+				if(amountOfPendingRequests == 0) {
+					pendingRequestsLabel.setVisible(false);
+				}
+				else {
+					pendingRequestsLabel.setVisible(true);
+					pendingRequestsLabel.setText("Pending Requests Queue: " + amountOfPendingRequests);
+				}
+			}
+		};
+		if (SwingUtilities.isEventDispatchThread()) {
+			updateTask.run();
+		}
+		else {
+			SwingUtilities.invokeLater(updateTask);
 		}
 	} 
 	
@@ -605,6 +637,19 @@ public class CenterPanel extends JPanel {
 				for (Session session : config.getSessions()) {
 					AnalyzerRequestResponse analyzerRequestResponse = session.getRequestResponseMap()
 							.get(originalRequestResponse.getId());
+					if (analyzerRequestResponse == null) {
+						tabbedPanel1.setRequestMessage(session.getName(),
+								getMessageViewLabel("No stored analyzer result for request id " + originalRequestResponse.getId()), null);
+						tabbedPanel1.setResponseMessage(session.getName(),
+								getMessageViewLabel("No stored analyzer result for request id " + originalRequestResponse.getId()), null);
+						if (compareViewVisible) {
+							tabbedPanel2.setRequestMessage(session.getName(),
+									getMessageViewLabel("No stored analyzer result for request id " + originalRequestResponse.getId()), null);
+							tabbedPanel2.setResponseMessage(session.getName(),
+									getMessageViewLabel("No stored analyzer result for request id " + originalRequestResponse.getId()), null);
+						}
+						continue;
+					}
 					IHttpRequestResponse sessionRequestResponse = analyzerRequestResponse.getRequestResponse();
 					if (sessionRequestResponse != null) {
 						IMessageEditorController controller = new CustomIMessageEditorController(

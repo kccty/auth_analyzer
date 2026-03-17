@@ -510,6 +510,8 @@ public class ConfigurationPanel extends JPanel {
 					}
 				}
 				if (success) {
+					boolean rebuildCenterPanel = sessionListChanged && config.getTableModel() != null
+							&& config.getTableModel().getRowCount() == 0;
 					createSessionObjects(true);
 					// Auto Store
 					try {
@@ -522,8 +524,11 @@ public class ConfigurationPanel extends JPanel {
 						filter.resetFilteredAmount();
 					}
 
-					if(sessionListChanged) {
+					if(rebuildCenterPanel) {
 						mainPanel.getCenterPanel().initCenterPanel();
+					}
+					else {
+						mainPanel.getCenterPanel().refreshTableFilter();
 					}
 					sessionTabbedPane.setModifEnabled(false);
 					pauseButton.setEnabled(true);

@@ -1,5 +1,6 @@
 package com.protect7.authanalyzer.util;
 
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -56,16 +57,24 @@ public class DataStorageProvider {
 	}
 
 	public static void saveSetup() {
+		BurpExtender.callbacks.printOutput("[AuthAnalyzer][save-setup] Persisting session/filter setup to sitemap storage");
 		BurpExtender.callbacks.addToSiteMap(getSettingsMessage());
 	}
 
 	public static String loadSetup() {
 		IHttpRequestResponse[] messages = BurpExtender.callbacks.getSiteMap(HTTPSERVICE.toString() + SETTINGS_PATH);
+		BurpExtender.callbacks.printOutput("[AuthAnalyzer][load-setup] entries=" + messages.length);
 		if (messages.length > 0) {
-			try {
-				return new String(messages[messages.length - 1].getResponse());
-			} catch (Exception e) {
-				return null;
+			for (int i = messages.length - 1; i >= 0; i--) {
+				try {
+					byte[] response = messages[i].getResponse();
+					BurpExtender.callbacks.printOutput("[AuthAnalyzer][load-setup] candidateIndex=" + i + " responseBytes=" + (response == null ? -1 : response.length));
+					if (response != null && response.length > 0) {
+						return new String(response);
+					}
+				} catch (Exception e) {
+					BurpExtender.callbacks.printOutput("[AuthAnalyzer][load-setup][error] candidateIndex=" + i + " msg=" + e.getMessage());
+				}
 			}
 		}
 		return null;
@@ -96,6 +105,11 @@ public class DataStorageProvider {
 				toStoredHttpMessage(requestResponse.getRequestResponse()), requestResponse.getMethod(), requestResponse.getUrl(),
 				requestResponse.getInfoText(), requestResponse.getComment(), requestResponse.getStatusCode(),
 				requestResponse.getResponseContentLength(), requestResponse.isMarked());
+		BurpExtender.callbacks.printOutput(String.format(
+				"[AuthAnalyzer][store-original] id=%d method=%s url=%s req=%d resp=%d",
+				stored.getId(), stored.getMethod(), stored.getUrl(),
+				stored.getMessage() == null || stored.getMessage().getRequest() == null ? -1 : stored.getMessage().getRequest().length,
+				stored.getMessage() == null || stored.getMessage().getResponse() == null ? -1 : stored.getMessage().getResponse().length));
 		saveOriginalRequestResponse(stored);
 	}
 
@@ -106,6 +120,11 @@ public class DataStorageProvider {
 		StoredAnalyzerRequestResponse stored = new StoredAnalyzerRequestResponse(toStoredHttpMessage(requestResponse.getRequestResponse()),
 				requestResponse.getStatus() == null ? null : requestResponse.getStatus().name(), requestResponse.getInfoText(),
 				requestResponse.getStatusCode(), requestResponse.getResponseContentLength());
+		BurpExtender.callbacks.printOutput(String.format(
+				"[AuthAnalyzer][store-session] session=%s id=%d status=%s req=%d resp=%d",
+				sessionName, id, stored.getStatus(),
+				stored.getMessage() == null || stored.getMessage().getRequest() == null ? -1 : stored.getMessage().getRequest().length,
+				stored.getMessage() == null || stored.getMessage().getResponse() == null ? -1 : stored.getMessage().getResponse().length));
 		saveSessionRequestResponse(sessionName, id, stored);
 	}
 	
@@ -125,14 +144,21 @@ public class DataStorageProvider {
 	public static void restoreStoredMessages() {
 		StoredIndex index = loadIndex();
 		if (index == null) {
+			BurpExtender.callbacks.printOutput("[AuthAnalyzer][restore] index is null, nothing to restore");
 			return;
 		}
 		CurrentConfig config = CurrentConfig.getCurrentConfig();
 		ArrayList<Integer> originalIds = new ArrayList<Integer>(index.originalIds);
 		Collections.sort(originalIds);
 		int maxId = config.getMapId();
+		BurpExtender.callbacks.printOutput(String.format(
+				"[AuthAnalyzer][restore] start originalIds=%d sessionNames=%s currentMapId=%d",
+				originalIds.size(), index.sessions.keySet(), config.getMapId()));
 		for (Integer id : originalIds) {
 			StoredOriginalRequestResponse stored = loadStoredOriginal(id);
+			BurpExtender.callbacks.printOutput(String.format(
+					"[AuthAnalyzer][restore-original] id=%d stored=%s message=%s",
+					id, stored == null ? "null" : "ok", (stored == null || stored.getMessage() == null) ? "null" : "ok"));
 			if (stored == null || stored.getMessage() == null) {
 				continue;
 			}
@@ -148,10 +174,14 @@ public class DataStorageProvider {
 		for (Map.Entry<String, ArrayList<Integer>> entry : index.sessions.entrySet()) {
 			Session session = config.getSessionByName(entry.getKey());
 			if (session == null) {
+				BurpExtender.callbacks.printOutput("[AuthAnalyzer][restore-session] session not found: " + entry.getKey());
 				continue;
 			}
 			for (Integer id : entry.getValue()) {
 				StoredAnalyzerRequestResponse stored = loadStoredSession(entry.getKey(), id);
+				BurpExtender.callbacks.printOutput(String.format(
+						"[AuthAnalyzer][restore-session] session=%s id=%d stored=%s message=%s",
+						entry.getKey(), id, stored == null ? "null" : "ok", (stored == null || stored.getMessage() == null) ? "null" : "ok"));
 				if (stored == null) {
 					continue;
 				}
@@ -165,6 +195,15 @@ public class DataStorageProvider {
 			}
 		}
 		config.setMapId(maxId);
+		javax.swing.SwingUtilities.invokeLater(new Runnable() {
+			@Override
+			public void run() {
+				config.getTableModel().fireTableDataChanged();
+			}
+		});
+		BurpExtender.callbacks.printOutput(String.format(
+				"[AuthAnalyzer][restore] done tableRows=%d maxId=%d",
+				config.getTableModel().getRowCount(), maxId));
 	}
 
 	public static void deleteStoredRequestResponse(int id) {
@@ -236,14 +275,23 @@ public class DataStorageProvider {
 
 	private static <T> T readJsonMessage(String path, Class<T> type) {
 		IHttpRequestResponse[] messages = BurpExtender.callbacks.getSiteMap(HTTPSERVICE.toString() + path);
+		BurpExtender.callbacks.printOutput("[AuthAnalyzer][read-json] path=" + path + " entries=" + messages.length);
 		if (messages.length == 0) {
 			return null;
 		}
-		try {
-			return GSON.fromJson(new String(messages[messages.length - 1].getResponse()), type);
-		} catch (Exception e) {
-			return null;
+		for (int i = messages.length - 1; i >= 0; i--) {
+			try {
+				byte[] response = messages[i].getResponse();
+				BurpExtender.callbacks.printOutput("[AuthAnalyzer][read-json] path=" + path + " candidateIndex=" + i + " responseBytes=" + (response == null ? -1 : response.length));
+				if (response == null || response.length == 0) {
+					continue;
+				}
+				return GSON.fromJson(new String(response), type);
+			} catch (Exception e) {
+				BurpExtender.callbacks.printOutput("[AuthAnalyzer][read-json][error] path=" + path + " candidateIndex=" + i + " msg=" + e.getMessage());
+			}
 		}
+		return null;
 	}
 
 	private static void storeJsonMessage(String path, String jsonBody) {
@@ -254,10 +302,8 @@ public class DataStorageProvider {
 	}
 
 	private static void deletePath(String path) {
-		IHttpRequestResponse[] messages = BurpExtender.callbacks.getSiteMap(HTTPSERVICE.toString() + path);
-		for (IHttpRequestResponse message : messages) {
-			BurpExtender.callbacks.removeFromSiteMap(message);
-		}
+		// Burp Extender API does not expose removeFromSiteMap; overwrite the path with an empty payload instead.
+		storeJsonMessage(path, null);
 	}
 
 	private static IHttpRequestResponse getSettingsMessage() {
@@ -415,6 +461,11 @@ public class DataStorageProvider {
 		for (ArrayList<Integer> ids : index.sessions.values()) {
 			Collections.sort(ids);
 		}
+		BurpExtender.callbacks.printOutput(String.format(
+				"[AuthAnalyzer][save-index] originalCount=%d sessionCount=%d sessions=%s",
+				index.originalIds == null ? -1 : index.originalIds.size(),
+				index.sessions == null ? -1 : index.sessions.size(),
+				index.sessions));
 		storeJsonMessage(INDEX_PATH, GSON.toJson(index));
 	}
 

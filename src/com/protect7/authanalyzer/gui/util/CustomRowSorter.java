@@ -47,7 +47,8 @@ public class CustomRowSorter extends TableRowSorter<RequestTableModel> {
 							int id = Integer.parseInt(entry.getStringValue(0));
 							for (Session session : CurrentConfig.getCurrentConfig().getSessions()) {
 								AnalyzerRequestResponse analyzerRequestResponse = session.getRequestResponseMap().get(id);
-								if(analyzerRequestResponse.getRequestResponse().getRequest() != null) {
+								if(analyzerRequestResponse != null && analyzerRequestResponse.getRequestResponse() != null
+										&& analyzerRequestResponse.getRequestResponse().getRequest() != null) {
 									String response = new String(analyzerRequestResponse.getRequestResponse().getRequest());
 									boolean contained = response.contains(filterText.getText());
 									if((contained && !negativeSearch.isSelected()) || (!contained && negativeSearch.isSelected())) {
@@ -66,7 +67,8 @@ public class CustomRowSorter extends TableRowSorter<RequestTableModel> {
 							int id = Integer.parseInt(entry.getStringValue(0));
 							for (Session session : CurrentConfig.getCurrentConfig().getSessions()) {
 								AnalyzerRequestResponse analyzerRequestResponse = session.getRequestResponseMap().get(id);
-								if(analyzerRequestResponse.getRequestResponse().getResponse() != null) {
+								if(analyzerRequestResponse != null && analyzerRequestResponse.getRequestResponse() != null
+										&& analyzerRequestResponse.getRequestResponse().getResponse() != null) {
 									String response = new String(analyzerRequestResponse.getRequestResponse().getResponse());
 									boolean contained = response.contains(filterText.getText());
 									if((contained && !negativeSearch.isSelected()) || (!contained && negativeSearch.isSelected())) {
@@ -98,32 +100,37 @@ public class CustomRowSorter extends TableRowSorter<RequestTableModel> {
 						return false;
 					}
 				}
-				if(showBypassed.isSelected()) {
-					for(int i = entry.getValueCount()-1; i>3; i--) {
-						if(entry.getStringValue(i).equals(BypassConstants.SAME.toString())) {
-							return true;
-						}
-					}
+
+				boolean statusFilterEnabled = showBypassed.isSelected() || showPotentialBypassed.isSelected()
+						|| showNotBypassed.isSelected() || showNA.isSelected();
+				if(!statusFilterEnabled) {
+					return true;
 				}
-				if(showPotentialBypassed.isSelected()) {
-					for(int i = entry.getValueCount()-1; i>3; i--) {
-						if(entry.getStringValue(i).equals(BypassConstants.SIMILAR.toString())) {
-							return true;
-						}
-					}
+
+				boolean hasSessionColumns = entry.getValueCount() > 4;
+				if(!hasSessionColumns) {
+					return true;
 				}
-				if(showNotBypassed.isSelected()) {
-					for(int i = entry.getValueCount()-1; i>3; i--) {
-						if(entry.getStringValue(i).equals(BypassConstants.DIFFERENT.toString())) {
+
+				for(int i = entry.getValueCount()-1; i>3; i--) {
+					String value = entry.getStringValue(i);
+					if(value == null || value.equals("null") || value.equals("")) {
+						if(showNA.isSelected()) {
 							return true;
 						}
+						continue;
 					}
-				}
-				if(showNA.isSelected()) {
-					for(int i = entry.getValueCount()-1; i>3; i--) {
-						if(entry.getStringValue(i).equals(BypassConstants.NA.toString())) {
-							return true;
-						}
+					if(showBypassed.isSelected() && value.equals(BypassConstants.SAME.toString())) {
+						return true;
+					}
+					if(showPotentialBypassed.isSelected() && value.equals(BypassConstants.SIMILAR.toString())) {
+						return true;
+					}
+					if(showNotBypassed.isSelected() && value.equals(BypassConstants.DIFFERENT.toString())) {
+						return true;
+					}
+					if(showNA.isSelected() && value.equals(BypassConstants.NA.toString())) {
+						return true;
 					}
 				}
 				return false;
