@@ -131,16 +131,45 @@ public class DataStorageProvider {
 	}
 	
 	public static void saveAllStoredMessages() {
-		clearStoredMessages();
 		CurrentConfig config = CurrentConfig.getCurrentConfig();
+		StoredIndex snapshot = new StoredIndex();
+		BurpExtender.callbacks.printOutput("[AuthAnalyzer][save-all] start originals="
+				+ config.getTableModel().getOriginalRequestResponseList().size() + " sessions=" + config.getSessions().size());
 		for (OriginalRequestResponse requestResponse : config.getTableModel().getOriginalRequestResponseList()) {
-			saveOriginalRequestResponse(requestResponse);
-		}
-		for (Session session : config.getSessions()) {
-			for (Map.Entry<Integer, AnalyzerRequestResponse> entry : session.getRequestResponseMap().entrySet()) {
-				saveSessionRequestResponse(session.getName(), entry.getKey(), entry.getValue());
+			if (requestResponse == null) {
+				continue;
+			}
+			StoredOriginalRequestResponse stored = new StoredOriginalRequestResponse(requestResponse.getId(),
+					toStoredHttpMessage(requestResponse.getRequestResponse()), requestResponse.getMethod(), requestResponse.getUrl(),
+					requestResponse.getInfoText(), requestResponse.getComment(), requestResponse.getStatusCode(),
+					requestResponse.getResponseContentLength(), requestResponse.isMarked());
+			storeJsonMessage(ORIGINAL_BASE_PATH + stored.getId(), GSON.toJson(stored));
+			if (!snapshot.originalIds.contains(stored.getId())) {
+				snapshot.originalIds.add(stored.getId());
 			}
 		}
+		Collections.sort(snapshot.originalIds);
+		for (Session session : config.getSessions()) {
+			ArrayList<Integer> ids = snapshot.sessions.computeIfAbsent(session.getName(), k -> new ArrayList<Integer>());
+			for (Map.Entry<Integer, AnalyzerRequestResponse> entry : session.getRequestResponseMap().entrySet()) {
+				if (entry.getValue() == null) {
+					continue;
+				}
+				StoredAnalyzerRequestResponse stored = new StoredAnalyzerRequestResponse(
+						toStoredHttpMessage(entry.getValue().getRequestResponse()),
+						entry.getValue().getStatus() == null ? null : entry.getValue().getStatus().name(),
+						entry.getValue().getInfoText(), entry.getValue().getStatusCode(),
+						entry.getValue().getResponseContentLength());
+				storeJsonMessage(getSessionPath(session.getName(), entry.getKey()), GSON.toJson(stored));
+				if (!ids.contains(entry.getKey())) {
+					ids.add(entry.getKey());
+				}
+			}
+			Collections.sort(ids);
+		}
+		saveIndex(snapshot);
+		BurpExtender.callbacks.printOutput("[AuthAnalyzer][save-all] done originalIds=" + snapshot.originalIds
+				+ " sessionNames=" + snapshot.sessions.keySet());
 	}
 
 	public static void restoreStoredMessages() {
@@ -214,32 +243,21 @@ public class DataStorageProvider {
 			return;
 		}
 		index.originalIds.remove(Integer.valueOf(id));
-		deletePath(ORIGINAL_BASE_PATH + id);
 		for (String sessionName : new ArrayList<String>(index.sessions.keySet())) {
 			ArrayList<Integer> ids = index.sessions.get(sessionName);
 			ids.remove(Integer.valueOf(id));
-			deletePath(getSessionPath(sessionName, id));
 			if (ids.isEmpty()) {
 				index.sessions.remove(sessionName);
 			}
 		}
 		saveIndex(index);
+		BurpExtender.callbacks.printOutput("[AuthAnalyzer][delete-stored] id=" + id + " updatedIndex originalIds="
+				+ index.originalIds + " sessionNames=" + index.sessions.keySet());
 	}
 
 	public static void clearStoredMessages() {
-		StoredIndex index = loadIndex();
-		if (index == null) {
-			return;
-		}
-		for (Integer id : new ArrayList<Integer>(index.originalIds)) {
-			deletePath(ORIGINAL_BASE_PATH + id);
-		}
-		for (Map.Entry<String, ArrayList<Integer>> entry : index.sessions.entrySet()) {
-			for (Integer id : entry.getValue()) {
-				deletePath(getSessionPath(entry.getKey(), id));
-			}
-		}
-		deletePath(INDEX_PATH);
+		BurpExtender.callbacks.printOutput("[AuthAnalyzer][clear-stored] resetting index only; keeping historical sitemap payloads untouched");
+		saveIndex(new StoredIndex());
 	}
 
 	private static void saveOriginalRequestResponse(StoredOriginalRequestResponse stored) {
