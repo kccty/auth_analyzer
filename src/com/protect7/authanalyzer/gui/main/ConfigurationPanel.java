@@ -253,6 +253,8 @@ public class ConfigurationPanel extends JPanel {
 			String storedData = DataStorageProvider.loadSetup();
 			if(storedData != null) {
 				loadSetup(storedData);
+				createSessionObjects(false);
+				sessionListChanged = false;
 				DataStorageProvider.restoreStoredMessages();
 				mainPanel.updateDividerLocation();
 			}
