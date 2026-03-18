@@ -261,7 +261,13 @@ public class ConfigurationPanel extends JPanel {
 				sessionListChanged = false;
 				BurpExtender.callbacks.printOutput("[AuthAnalyzer][startup] after createSessionObjects configSessions=" + config.getSessions().size()
 						+ " configSessionNames=" + getConfigSessionNames() + " sessionListChanged=" + sessionListChanged);
+				mainPanel.getCenterPanel().initCenterPanel();
+				BurpExtender.callbacks.printOutput("[AuthAnalyzer][startup-ui] after initCenterPanel tab1="
+						+ mainPanel.getCenterPanel().getTabCountDebug());
 				DataStorageProvider.restoreStoredMessages();
+				mainPanel.getCenterPanel().refreshAfterRestore();
+				BurpExtender.callbacks.printOutput("[AuthAnalyzer][startup-ui] after refreshAfterRestore tab1="
+						+ mainPanel.getCenterPanel().getTabCountDebug());
 				mainPanel.updateDividerLocation();
 			}
 		} catch (Exception e) {

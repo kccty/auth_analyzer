@@ -472,6 +472,21 @@ public class CenterPanel extends JPanel {
 		refreshTableFilter();
 	}
 
+	public void refreshAfterRestore() {
+		tableModel.fireTableStructureChanged();
+		refreshTableFilter();
+		BurpExtender.callbacks.printOutput("[AuthAnalyzer][startup-ui] refreshAfterRestore rows=" + tableModel.getRowCount()
+				+ " sessions=" + config.getSessions().size());
+		if (table.getRowCount() > 0) {
+			table.setRowSelectionInterval(0, 0);
+			changeRequestResponseView(false);
+		}
+	}
+
+	public String getTabCountDebug() {
+		return "rows=" + table.getRowCount() + ",tabbed1=" + tabbedPanel1.getTabCount() + ",tabbed2=" + tabbedPanel2.getTabCount();
+	}
+
 	public void clearTablePressed() {
 		clearTableButton.setIcon(loaderImageIcon);
 		if (config.isRunning()) {
