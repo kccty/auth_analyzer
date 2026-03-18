@@ -183,6 +183,18 @@ public class DataStorageProvider {
 						"[AuthAnalyzer][restore-session] session=%s id=%d stored=%s message=%s",
 						entry.getKey(), id, stored == null ? "null" : "ok", (stored == null || stored.getMessage() == null) ? "null" : "ok"));
 				if (stored == null) {
+					OriginalRequestResponse originalRequestResponse = config.getTableModel().getOriginalRequestResponseById(id);
+					if (originalRequestResponse != null) {
+						BurpExtender.callbacks.printOutput(String.format(
+								"[AuthAnalyzer][restore-session] session=%s id=%d missing stored session payload, backfilling placeholder from original request",
+								entry.getKey(), id));
+						AnalyzerRequestResponse placeholder = new AnalyzerRequestResponse(null, BypassConstants.NA,
+								"Restored without persisted session request/response payload.", -1, -1);
+						session.putRequestResponse(id, placeholder);
+						if (id > maxId) {
+							maxId = id;
+						}
+					}
 					continue;
 				}
 				AnalyzerRequestResponse restored = new AnalyzerRequestResponse(toHttpRequestResponse(stored.getMessage()),
@@ -191,6 +203,18 @@ public class DataStorageProvider {
 				session.putRequestResponse(id, restored);
 				if (id > maxId) {
 					maxId = id;
+				}
+			}
+		}
+
+		for (Session session : config.getSessions()) {
+			for (Integer id : originalIds) {
+				if (!session.getRequestResponseMap().containsKey(id)) {
+					BurpExtender.callbacks.printOutput(String.format(
+							"[AuthAnalyzer][restore-session] session=%s id=%d absent after indexed restore, injecting placeholder",
+							session.getName(), id));
+					session.putRequestResponse(id, new AnalyzerRequestResponse(null, BypassConstants.NA,
+							"Restored without persisted session entry.", -1, -1));
 				}
 			}
 		}
