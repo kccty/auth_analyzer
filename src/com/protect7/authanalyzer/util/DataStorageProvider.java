@@ -155,6 +155,11 @@ public class DataStorageProvider {
 				if (entry.getValue() == null) {
 					continue;
 				}
+				if (!snapshot.originalIds.contains(entry.getKey())) {
+					BurpExtender.callbacks.printOutput("[AuthAnalyzer][save-all] skip orphan session entry session="
+							+ session.getName() + " id=" + entry.getKey());
+					continue;
+				}
 				StoredAnalyzerRequestResponse stored = new StoredAnalyzerRequestResponse(
 						toStoredHttpMessage(entry.getValue().getRequestResponse()),
 						entry.getValue().getStatus() == null ? null : entry.getValue().getStatus().name(),
@@ -209,6 +214,11 @@ public class DataStorageProvider {
 				continue;
 			}
 			for (Integer id : entry.getValue()) {
+				if (!originalIds.contains(id)) {
+					BurpExtender.callbacks.printOutput("[AuthAnalyzer][restore-session] skip orphan session entry session="
+							+ entry.getKey() + " id=" + id + " because original id is not present in index.originalIds");
+					continue;
+				}
 				StoredAnalyzerRequestResponse stored = loadStoredSession(entry.getKey(), id);
 				BurpExtender.callbacks.printOutput(String.format(
 						"[AuthAnalyzer][restore-session] session=%s id=%d stored=%s message=%s",
