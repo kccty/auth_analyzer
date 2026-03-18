@@ -251,10 +251,16 @@ public class ConfigurationPanel extends JPanel {
 	public void loadAutoStoredData() {
 		try {
 			String storedData = DataStorageProvider.loadSetup();
+			BurpExtender.callbacks.printOutput("[AuthAnalyzer][startup] loadAutoStoredData storedData=" + (storedData == null ? "null" : ("len=" + storedData.length())));
 			if(storedData != null) {
 				loadSetup(storedData);
+				BurpExtender.callbacks.printOutput("[AuthAnalyzer][startup] after loadSetup sessionPanelMap=" + sessionPanelMap.keySet()
+						+ " tabCount=" + sessionTabbedPane.getTabCount() + " configSessions=" + config.getSessions().size()
+						+ " sessionListChanged=" + sessionListChanged);
 				createSessionObjects(false);
 				sessionListChanged = false;
+				BurpExtender.callbacks.printOutput("[AuthAnalyzer][startup] after createSessionObjects configSessions=" + config.getSessions().size()
+						+ " configSessionNames=" + getConfigSessionNames() + " sessionListChanged=" + sessionListChanged);
 				DataStorageProvider.restoreStoredMessages();
 				mainPanel.updateDividerLocation();
 			}
@@ -265,6 +271,9 @@ public class ConfigurationPanel extends JPanel {
 			createSession("user1");
 		}
 		sessionTabbedPane.setSelectedIndex(0);
+		BurpExtender.callbacks.printOutput("[AuthAnalyzer][startup] loadAutoStoredData done tabCount=" + sessionTabbedPane.getTabCount()
+				+ " selectedIndex=" + sessionTabbedPane.getSelectedIndex() + " configSessions=" + config.getSessions().size()
+				+ " configSessionNames=" + getConfigSessionNames());
 	}
 	
 	public void saveSetup() {
@@ -616,6 +625,14 @@ public class ConfigurationPanel extends JPanel {
 				sessionPanel.getStatusPanel().init(newSession);
 			}
 		}
+	}
+
+	private String getConfigSessionNames() {
+		ArrayList<String> names = new ArrayList<String>();
+		for (Session session : config.getSessions()) {
+			names.add(session.getName());
+		}
+		return names.toString();
 	}
 
 	private void loadSetup(String jsonString) {

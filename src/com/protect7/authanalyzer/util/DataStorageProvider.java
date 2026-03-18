@@ -120,11 +120,13 @@ public class DataStorageProvider {
 		StoredAnalyzerRequestResponse stored = new StoredAnalyzerRequestResponse(toStoredHttpMessage(requestResponse.getRequestResponse()),
 				requestResponse.getStatus() == null ? null : requestResponse.getStatus().name(), requestResponse.getInfoText(),
 				requestResponse.getStatusCode(), requestResponse.getResponseContentLength());
+		String path = getSessionPath(sessionName, id);
 		BurpExtender.callbacks.printOutput(String.format(
-				"[AuthAnalyzer][store-session] session=%s id=%d status=%s req=%d resp=%d",
-				sessionName, id, stored.getStatus(),
+				"[AuthAnalyzer][store-session] session=%s id=%d path=%s status=%s req=%d resp=%d info=%s",
+				sessionName, id, path, stored.getStatus(),
 				stored.getMessage() == null || stored.getMessage().getRequest() == null ? -1 : stored.getMessage().getRequest().length,
-				stored.getMessage() == null || stored.getMessage().getResponse() == null ? -1 : stored.getMessage().getResponse().length));
+				stored.getMessage() == null || stored.getMessage().getResponse() == null ? -1 : stored.getMessage().getResponse().length,
+				stored.getInfoText()));
 		saveSessionRequestResponse(sessionName, id, stored);
 	}
 	
@@ -251,7 +253,11 @@ public class DataStorageProvider {
 	}
 
 	private static void saveSessionRequestResponse(String sessionName, int id, StoredAnalyzerRequestResponse stored) {
-		storeJsonMessage(getSessionPath(sessionName, id), GSON.toJson(stored));
+		String path = getSessionPath(sessionName, id);
+		String json = GSON.toJson(stored);
+		BurpExtender.callbacks.printOutput("[AuthAnalyzer][store-session-persist] session=" + sessionName + " id=" + id
+				+ " path=" + path + " jsonLen=" + (json == null ? -1 : json.length()));
+		storeJsonMessage(path, json);
 		StoredIndex index = loadIndex();
 		ArrayList<Integer> ids = index.sessions.get(sessionName);
 		if (ids == null) {
@@ -263,6 +269,8 @@ public class DataStorageProvider {
 			Collections.sort(ids);
 		}
 		saveIndex(index);
+		BurpExtender.callbacks.printOutput("[AuthAnalyzer][store-session-persist] session=" + sessionName + " id=" + id
+				+ " indexIds=" + ids);
 	}
 
 	private static StoredOriginalRequestResponse loadStoredOriginal(int id) {
@@ -270,7 +278,17 @@ public class DataStorageProvider {
 	}
 
 	private static StoredAnalyzerRequestResponse loadStoredSession(String sessionName, int id) {
-		return readJsonMessage(getSessionPath(sessionName, id), StoredAnalyzerRequestResponse.class);
+		String path = getSessionPath(sessionName, id);
+		BurpExtender.callbacks.printOutput("[AuthAnalyzer][load-session] session=" + sessionName + " id=" + id + " path=" + path);
+		StoredAnalyzerRequestResponse stored = readJsonMessage(path, StoredAnalyzerRequestResponse.class);
+		BurpExtender.callbacks.printOutput(String.format(
+				"[AuthAnalyzer][load-session] session=%s id=%d stored=%s req=%d resp=%d status=%s info=%s",
+				sessionName, id, stored == null ? "null" : "ok",
+				stored == null || stored.getMessage() == null || stored.getMessage().getRequest() == null ? -1 : stored.getMessage().getRequest().length,
+				stored == null || stored.getMessage() == null || stored.getMessage().getResponse() == null ? -1 : stored.getMessage().getResponse().length,
+				stored == null ? null : stored.getStatus(),
+				stored == null ? null : stored.getInfoText()));
+		return stored;
 	}
 
 	private static <T> T readJsonMessage(String path, Class<T> type) {
@@ -295,9 +313,12 @@ public class DataStorageProvider {
 	}
 
 	private static void storeJsonMessage(String path, String jsonBody) {
+		BurpExtender.callbacks.printOutput("[AuthAnalyzer][store-json] path=" + path + " bodyLen=" + (jsonBody == null ? -1 : jsonBody.length()));
 		IHttpRequestResponse message = buildStorageMessage(path, jsonBody == null ? null : jsonBody.getBytes());
 		if (message != null) {
 			BurpExtender.callbacks.addToSiteMap(message);
+			IHttpRequestResponse[] messages = BurpExtender.callbacks.getSiteMap(HTTPSERVICE.toString() + path);
+			BurpExtender.callbacks.printOutput("[AuthAnalyzer][store-json] path=" + path + " entriesAfterWrite=" + messages.length);
 		}
 	}
 
