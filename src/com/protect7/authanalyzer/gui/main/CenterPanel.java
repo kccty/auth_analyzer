@@ -673,6 +673,7 @@ public class CenterPanel extends JPanel {
 		}
 	}
 
+
 	private HttpRequestResponse toMontoyaRequestResponse(IHttpRequestResponse message) {
 		if (message == null || message.getRequest() == null) {
 			return null;

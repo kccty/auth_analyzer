@@ -15,6 +15,22 @@ public class MontoyaHttpRequestResponseAdapter implements IHttpRequestResponse {
 		this.response = rr.response() == null ? null : rr.response().toByteArray().getBytes();
 	}
 
+	public MontoyaHttpRequestResponseAdapter(IHttpRequestResponse rr) {
+		if (rr == null) {
+			return;
+		}
+		if (rr.getHttpService() != null) {
+			this.montoyaService = burp.api.montoya.http.HttpService.httpService(
+					rr.getHttpService().getHost(),
+					rr.getHttpService().getPort(),
+					"https".equalsIgnoreCase(rr.getHttpService().getProtocol()));
+		}
+		this.request = rr.getRequest();
+		this.response = rr.getResponse();
+		this.comment = rr.getComment();
+		this.highlight = rr.getHighlight();
+	}
+
 	public MontoyaHttpRequestResponseAdapter(burp.api.montoya.http.HttpService service, byte[] request, byte[] response) {
 		this.montoyaService = service;
 		this.request = request;
