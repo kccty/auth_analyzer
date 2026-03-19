@@ -6,6 +6,7 @@ import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
+
 import com.protect7.authanalyzer.controller.HttpListener;
 import com.protect7.authanalyzer.gui.main.MainPanel;
 import com.protect7.authanalyzer.gui.util.AuthAnalyzerMenu;
@@ -13,12 +14,24 @@ import com.protect7.authanalyzer.util.DataStorageProvider;
 import com.protect7.authanalyzer.util.GenericHelper;
 import com.protect7.authanalyzer.util.Globals;
 
-public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListener {
+import burp.api.montoya.BurpExtension;
+import burp.api.montoya.MontoyaApi;
+
+public class BurpExtender implements BurpExtension, IBurpExtender, ITab, IExtensionStateListener {
 
 	public static MainPanel mainPanel;
 	private JMenu authAnalyzerMenu = null;
 	public static IBurpExtenderCallbacks callbacks;
+	public static MontoyaApi montoyaApi;
 	public static JTabbedPane burpTabbedPane = null;
+
+	@Override
+	public void initialize(MontoyaApi api) {
+		BurpExtender.montoyaApi = api;
+		if (callbacks != null) {
+			callbacks.printOutput("Montoya API initialized");
+		}
+	}
 
 	@Override
 	public void registerExtenderCallbacks(IBurpExtenderCallbacks callbacks) {
@@ -34,6 +47,9 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
 		callbacks.printOutput(Globals.EXTENSION_NAME + " successfully started");
 		callbacks.printOutput("Version " + Globals.VERSION);
 		callbacks.printOutput("Created by Simon Reinhart");
+		if (montoyaApi != null) {
+			callbacks.printOutput("Montoya API available for ProjectData persistence");
+		}
 	}
 
 	@Override
@@ -48,11 +64,10 @@ public class BurpExtender implements IBurpExtender, ITab, IExtensionStateListene
 	
 	private void addAuthAnalyzerMenu() {
 		SwingUtilities.invokeLater(new Runnable() {
-			
 			@Override
 			public void run() {
 				JFrame burpFrame = GenericHelper.getBurpFrame();
-				if(burpFrame != null) {
+				if (burpFrame != null) {
 					authAnalyzerMenu = new AuthAnalyzerMenu(Globals.EXTENSION_NAME);
 					JMenuBar burpMenuBar = burpFrame.getJMenuBar();
 					burpMenuBar.add(authAnalyzerMenu, burpMenuBar.getMenuCount() - 1);
