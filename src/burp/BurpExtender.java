@@ -7,7 +7,6 @@ import javax.swing.JMenuBar;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
 
-import com.protect7.authanalyzer.controller.HttpListener;
 import com.protect7.authanalyzer.gui.main.MainPanel;
 import com.protect7.authanalyzer.gui.util.AuthAnalyzerMenu;
 import com.protect7.authanalyzer.util.DataStorageProvider;
@@ -17,42 +16,26 @@ import com.protect7.authanalyzer.util.Globals;
 import burp.api.montoya.BurpExtension;
 import burp.api.montoya.MontoyaApi;
 
-public class BurpExtender implements BurpExtension, IBurpExtender, ITab, IExtensionStateListener {
+public class BurpExtender implements BurpExtension, ITab {
 
 	public static MainPanel mainPanel;
 	private JMenu authAnalyzerMenu = null;
 	public static IBurpExtenderCallbacks callbacks;
 	public static MontoyaApi montoyaApi;
-	private static volatile boolean autoRestoreTriggered = false;
 	public static JTabbedPane burpTabbedPane = null;
 
 	@Override
 	public void initialize(MontoyaApi api) {
 		BurpExtender.montoyaApi = api;
-		if (callbacks != null) {
-			callbacks.printOutput("Montoya API initialized");
-			triggerDeferredRestoreIfReady();
-		}
-	}
-
-	@Override
-	public void registerExtenderCallbacks(IBurpExtenderCallbacks callbacks) {
-		BurpExtender.callbacks = callbacks;
+		callbacks = new LegacyCallbackStub();
 		callbacks.setExtensionName(Globals.EXTENSION_NAME);
 		mainPanel = new MainPanel();
-		callbacks.addSuiteTab(this);
+		api.userInterface().registerSuiteTab(getTabCaption(), getUiComponent());
 		addAuthAnalyzerMenu();
-		HttpListener httpListener = new HttpListener();
-		callbacks.registerHttpListener(httpListener);
-		callbacks.registerProxyListener(httpListener);
-		callbacks.registerExtensionStateListener(this);
-		callbacks.printOutput(Globals.EXTENSION_NAME + " successfully started");
+		callbacks.printOutput(Globals.EXTENSION_NAME + " started in Montoya-only test mode");
 		callbacks.printOutput("Version " + Globals.VERSION);
 		callbacks.printOutput("Created by Simon Reinhart");
-		if (montoyaApi != null) {
-			callbacks.printOutput("Montoya API available for ProjectData persistence");
-		}
-		triggerDeferredRestoreIfReady();
+		mainPanel.getConfigurationPanel().finishDeferredAutoStoredDataLoad();
 	}
 
 	@Override
@@ -64,7 +47,7 @@ public class BurpExtender implements BurpExtension, IBurpExtender, ITab, IExtens
 	public Component getUiComponent() {
 		return mainPanel;
 	}
-	
+
 	private void addAuthAnalyzerMenu() {
 		SwingUtilities.invokeLater(new Runnable() {
 			@Override
@@ -77,29 +60,67 @@ public class BurpExtender implements BurpExtension, IBurpExtender, ITab, IExtens
 				}
 			}
 		});
-
 	}
 
-	public static synchronized void triggerDeferredRestoreIfReady() {
-		if (autoRestoreTriggered || callbacks == null || montoyaApi == null || mainPanel == null) {
-			return;
-		}
-		autoRestoreTriggered = true;
-		callbacks.printOutput("[AuthAnalyzer][startup] Both legacy and Montoya APIs are ready, running deferred restore");
-		mainPanel.getConfigurationPanel().finishDeferredAutoStoredDataLoad();
-	}
-
-	@Override
-	public void extensionUnloaded() {
-		if(authAnalyzerMenu != null && authAnalyzerMenu.getParent() != null) {
-			authAnalyzerMenu.getParent().remove(authAnalyzerMenu);
-		}
-		try {
-			mainPanel.getConfigurationPanel().createSessionObjects(false);
-			DataStorageProvider.saveSetup();
-		}
-		catch (Exception e) {
-			callbacks.printOutput("INFO: Session Setup not stored due to invalid data.");
-		}
-	}
+	/*
+	 * Legacy dual-entry startup kept here temporarily for easy rollback/debugging.
+	 * This path is intentionally disabled for Montoya single-entry testing.
+	 *
+	 * public class BurpExtender implements BurpExtension, IBurpExtender, ITab, IExtensionStateListener {
+	 *
+	 *     private static volatile boolean autoRestoreTriggered = false;
+	 *
+	 *     @Override
+	 *     public void initialize(MontoyaApi api) {
+	 *         BurpExtender.montoyaApi = api;
+	 *         if (callbacks != null) {
+	 *             callbacks.printOutput("Montoya API initialized");
+	 *             triggerDeferredRestoreIfReady();
+	 *         }
+	 *     }
+	 *
+	 *     @Override
+	 *     public void registerExtenderCallbacks(IBurpExtenderCallbacks callbacks) {
+	 *         BurpExtender.callbacks = callbacks;
+	 *         callbacks.setExtensionName(Globals.EXTENSION_NAME);
+	 *         mainPanel = new MainPanel();
+	 *         callbacks.addSuiteTab(this);
+	 *         addAuthAnalyzerMenu();
+	 *         HttpListener httpListener = new HttpListener();
+	 *         callbacks.registerHttpListener(httpListener);
+	 *         callbacks.registerProxyListener(httpListener);
+	 *         callbacks.registerExtensionStateListener(this);
+	 *         callbacks.printOutput(Globals.EXTENSION_NAME + " successfully started");
+	 *         callbacks.printOutput("Version " + Globals.VERSION);
+	 *         callbacks.printOutput("Created by Simon Reinhart");
+	 *         if (montoyaApi != null) {
+	 *             callbacks.printOutput("Montoya API available for ProjectData persistence");
+	 *         }
+	 *         triggerDeferredRestoreIfReady();
+	 *     }
+	 *
+	 *     public static synchronized void triggerDeferredRestoreIfReady() {
+	 *         if (autoRestoreTriggered || callbacks == null || montoyaApi == null || mainPanel == null) {
+	 *             return;
+	 *         }
+	 *         autoRestoreTriggered = true;
+	 *         callbacks.printOutput("[AuthAnalyzer][startup] Both legacy and Montoya APIs are ready, running deferred restore");
+	 *         mainPanel.getConfigurationPanel().finishDeferredAutoStoredDataLoad();
+	 *     }
+	 *
+	 *     @Override
+	 *     public void extensionUnloaded() {
+	 *         if(authAnalyzerMenu != null && authAnalyzerMenu.getParent() != null) {
+	 *             authAnalyzerMenu.getParent().remove(authAnalyzerMenu);
+	 *         }
+	 *         try {
+	 *             mainPanel.getConfigurationPanel().createSessionObjects(false);
+	 *             DataStorageProvider.saveSetup();
+	 *         }
+	 *         catch (Exception e) {
+	 *             callbacks.printOutput("INFO: Session Setup not stored due to invalid data.");
+	 *         }
+	 *     }
+	 * }
+	 */
 }
