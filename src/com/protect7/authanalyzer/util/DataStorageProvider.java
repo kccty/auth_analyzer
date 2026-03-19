@@ -30,9 +30,6 @@ public class DataStorageProvider {
 	private static final String INDEX_KEY = "index";
 	private static final String ORIGINALS_KEY = "originals";
 	private static final String SESSIONS_KEY = "sessions";
-	private static final String LEGACY_ORIGINALS_KEY = "legacy_originals";
-	private static final String LEGACY_SESSIONS_KEY = "legacy_sessions";
-	private static final String LEGACY_MIGRATION_DONE_KEY = "legacy_migration_done";
 	private static final Gson GSON = new GsonBuilder().create();
 
 	public static String getSetupAsJsonString() {
@@ -172,7 +169,6 @@ public class DataStorageProvider {
 	}
 
 	public static void restoreStoredMessages() {
-		migrateLegacySnapshotIfNeeded();
 		StoredIndex index = loadIndex();
 		if (index == null) {
 			BurpExtender.callbacks.printOutput("[AuthAnalyzer][restore] index is null, nothing to restore");
@@ -374,71 +370,6 @@ public class DataStorageProvider {
 		return root;
 	}
 
-	private static void migrateLegacySnapshotIfNeeded() {
-		PersistedObject root = rootStorage();
-		if ("true".equals(root.getString(LEGACY_MIGRATION_DONE_KEY))) {
-			return;
-		}
-		StoredIndex currentIndex = loadIndex();
-		boolean hasCurrentData = currentIndex != null
-				&& ((!currentIndex.originalIds.isEmpty()) || (currentIndex.sessions != null && !currentIndex.sessions.isEmpty()));
-		PersistedObject legacyOriginals = root.getChildObject(LEGACY_ORIGINALS_KEY);
-		PersistedObject legacySessions = root.getChildObject(LEGACY_SESSIONS_KEY);
-		boolean hasLegacyData = (legacyOriginals != null && !legacyOriginals.stringKeys().isEmpty())
-				|| (legacySessions != null && !legacySessions.childObjectKeys().isEmpty());
-		if (hasCurrentData || !hasLegacyData) {
-			root.setString(LEGACY_MIGRATION_DONE_KEY, "true");
-			return;
-		}
-		BurpExtender.callbacks.printOutput("[AuthAnalyzer][migrate] importing legacy persisted snapshot into ProjectData");
-		PersistedObject originals = ensureChild(root, ORIGINALS_KEY);
-		PersistedObject sessions = ensureChild(root, SESSIONS_KEY);
-		StoredIndex migratedIndex = new StoredIndex();
-		if (legacyOriginals != null) {
-			for (String key : new ArrayList<String>(legacyOriginals.stringKeys())) {
-				String json = legacyOriginals.getString(key);
-				if (json == null) {
-					continue;
-				}
-				originals.setString(key, json);
-				try {
-					int id = Integer.parseInt(key);
-					if (!migratedIndex.originalIds.contains(id)) {
-						migratedIndex.originalIds.add(id);
-					}
-				} catch (NumberFormatException ignored) {
-				}
-			}
-		}
-		if (legacySessions != null) {
-			for (String sessionKey : new ArrayList<String>(legacySessions.childObjectKeys())) {
-				PersistedObject legacySessionObject = legacySessions.getChildObject(sessionKey);
-				if (legacySessionObject == null) {
-					continue;
-				}
-				PersistedObject targetSessionObject = ensureChild(sessions, sessionKey);
-				ArrayList<Integer> ids = migratedIndex.sessions.computeIfAbsent(sessionKey, k -> new ArrayList<Integer>());
-				for (String idKey : new ArrayList<String>(legacySessionObject.stringKeys())) {
-					String json = legacySessionObject.getString(idKey);
-					if (json == null) {
-						continue;
-					}
-					targetSessionObject.setString(idKey, json);
-					try {
-						int id = Integer.parseInt(idKey);
-						if (!ids.contains(id)) {
-							ids.add(id);
-						}
-					} catch (NumberFormatException ignored) {
-					}
-				}
-			}
-		}
-		saveIndex(migratedIndex);
-		root.setString(LEGACY_MIGRATION_DONE_KEY, "true");
-		BurpExtender.callbacks.printOutput("[AuthAnalyzer][migrate] legacy snapshot import done originalIds="
-				+ migratedIndex.originalIds + " sessionNames=" + migratedIndex.sessions.keySet());
-	}
 
 	private static PersistedObject ensureChild(PersistedObject parent, String key) {
 		PersistedObject child = parent.getChildObject(key);
