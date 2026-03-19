@@ -44,6 +44,12 @@
 			<resource>
 				<directory>resources</directory>
 			</resource>
+			<resource>
+				<directory>src</directory>
+				<includes>
+					<include>META-INF/services/**</include>
+				</includes>
+			</resource>
 		</resources>
 	</build>
 	<dependencies>
