@@ -1,7 +1,5 @@
 package com.protect7.authanalyzer.util;
 
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -26,12 +24,11 @@ import burp.IHttpService;
 
 public class DataStorageProvider {
 
-	private static final String SITEMAP_HOST = "authanalyzer.storage.local";
-	private static final String SETTINGS_PATH = "/settings";
-	private static final String INDEX_PATH = "/messages/index";
-	private static final String ORIGINAL_BASE_PATH = "/messages/original/";
-	private static final String SESSION_BASE_PATH = "/messages/session/";
-	private static final IHttpService HTTPSERVICE = BurpExtender.callbacks.getHelpers().buildHttpService(SITEMAP_HOST, 443, true);
+	private static final String ROOT_KEY = "authanalyzer";
+	private static final String SETTINGS_KEY = "settings";
+	private static final String INDEX_KEY = "index";
+	private static final String ORIGINALS_KEY = "originals";
+	private static final String SESSIONS_KEY = "sessions";
 	private static final Gson GSON = new GsonBuilder().create();
 
 	public static String getSetupAsJsonString() {
@@ -57,27 +54,18 @@ public class DataStorageProvider {
 	}
 
 	public static void saveSetup() {
-		BurpExtender.callbacks.printOutput("[AuthAnalyzer][save-setup] Persisting session/filter setup to sitemap storage");
-		BurpExtender.callbacks.addToSiteMap(getSettingsMessage());
+		String json = getSetupAsJsonString();
+		BurpExtender.callbacks.printOutput("[AuthAnalyzer][save-setup] Persisting session/filter setup to ProjectData");
+		JsonObject root = rootStorage();
+		root.addProperty(SETTINGS_KEY, json);
+		saveRootStorage(root);
 	}
 
 	public static String loadSetup() {
-		IHttpRequestResponse[] messages = BurpExtender.callbacks.getSiteMap(HTTPSERVICE.toString() + SETTINGS_PATH);
-		BurpExtender.callbacks.printOutput("[AuthAnalyzer][load-setup] entries=" + messages.length);
-		if (messages.length > 0) {
-			for (int i = messages.length - 1; i >= 0; i--) {
-				try {
-					byte[] response = messages[i].getResponse();
-					BurpExtender.callbacks.printOutput("[AuthAnalyzer][load-setup] candidateIndex=" + i + " responseBytes=" + (response == null ? -1 : response.length));
-					if (response != null && response.length > 0) {
-						return new String(response);
-					}
-				} catch (Exception e) {
-					BurpExtender.callbacks.printOutput("[AuthAnalyzer][load-setup][error] candidateIndex=" + i + " msg=" + e.getMessage());
-				}
-			}
-		}
-		return null;
+		JsonObject root = rootStorage();
+		String value = root.has(SETTINGS_KEY) && !root.get(SETTINGS_KEY).isJsonNull() ? root.get(SETTINGS_KEY).getAsString() : null;
+		BurpExtender.callbacks.printOutput("[AuthAnalyzer][load-setup] found=" + (value != null));
+		return value;
 	}
 
 	public static void saveMessage(int id, String session, IHttpRequestResponse message) {
@@ -120,10 +108,9 @@ public class DataStorageProvider {
 		StoredAnalyzerRequestResponse stored = new StoredAnalyzerRequestResponse(toStoredHttpMessage(requestResponse.getRequestResponse()),
 				requestResponse.getStatus() == null ? null : requestResponse.getStatus().name(), requestResponse.getInfoText(),
 				requestResponse.getStatusCode(), requestResponse.getResponseContentLength());
-		String path = getSessionPath(sessionName, id);
 		BurpExtender.callbacks.printOutput(String.format(
-				"[AuthAnalyzer][store-session] session=%s id=%d path=%s status=%s req=%d resp=%d info=%s",
-				sessionName, id, path, stored.getStatus(),
+				"[AuthAnalyzer][store-session] session=%s id=%d status=%s req=%d resp=%d info=%s",
+				sessionName, id, stored.getStatus(),
 				stored.getMessage() == null || stored.getMessage().getRequest() == null ? -1 : stored.getMessage().getRequest().length,
 				stored.getMessage() == null || stored.getMessage().getResponse() == null ? -1 : stored.getMessage().getResponse().length,
 				stored.getInfoText()));
@@ -133,6 +120,11 @@ public class DataStorageProvider {
 	public static void saveAllStoredMessages() {
 		CurrentConfig config = CurrentConfig.getCurrentConfig();
 		StoredIndex snapshot = new StoredIndex();
+		JsonObject root = rootStorage();
+		JsonObject originals = ensureChild(root, ORIGINALS_KEY);
+		JsonObject sessions = ensureChild(root, SESSIONS_KEY);
+		clearChildObject(originals);
+		clearChildObject(sessions);
 		BurpExtender.callbacks.printOutput("[AuthAnalyzer][save-all] start originals="
 				+ config.getTableModel().getOriginalRequestResponseList().size() + " sessions=" + config.getSessions().size());
 		for (OriginalRequestResponse requestResponse : config.getTableModel().getOriginalRequestResponseList()) {
@@ -143,7 +135,7 @@ public class DataStorageProvider {
 					toStoredHttpMessage(requestResponse.getRequestResponse()), requestResponse.getMethod(), requestResponse.getUrl(),
 					requestResponse.getInfoText(), requestResponse.getComment(), requestResponse.getStatusCode(),
 					requestResponse.getResponseContentLength(), requestResponse.isMarked());
-			storeJsonMessage(ORIGINAL_BASE_PATH + stored.getId(), GSON.toJson(stored));
+			storeJsonObject(originals, String.valueOf(stored.getId()), GSON.toJson(stored));
 			if (!snapshot.originalIds.contains(stored.getId())) {
 				snapshot.originalIds.add(stored.getId());
 			}
@@ -151,6 +143,7 @@ public class DataStorageProvider {
 		Collections.sort(snapshot.originalIds);
 		for (Session session : config.getSessions()) {
 			ArrayList<Integer> ids = snapshot.sessions.computeIfAbsent(session.getName(), k -> new ArrayList<Integer>());
+			JsonObject sessionObject = ensureChild(sessions, sanitizePathSegment(session.getName()));
 			for (Map.Entry<Integer, AnalyzerRequestResponse> entry : session.getRequestResponseMap().entrySet()) {
 				if (entry.getValue() == null) {
 					continue;
@@ -165,13 +158,14 @@ public class DataStorageProvider {
 						entry.getValue().getStatus() == null ? null : entry.getValue().getStatus().name(),
 						entry.getValue().getInfoText(), entry.getValue().getStatusCode(),
 						entry.getValue().getResponseContentLength());
-				storeJsonMessage(getSessionPath(session.getName(), entry.getKey()), GSON.toJson(stored));
+				storeJsonObject(sessionObject, String.valueOf(entry.getKey()), GSON.toJson(stored));
 				if (!ids.contains(entry.getKey())) {
 					ids.add(entry.getKey());
 				}
 			}
 			Collections.sort(ids);
 		}
+		saveRootStorage(root);
 		saveIndex(snapshot);
 		BurpExtender.callbacks.printOutput("[AuthAnalyzer][save-all] done originalIds=" + snapshot.originalIds
 				+ " sessionNames=" + snapshot.sessions.keySet());
@@ -248,6 +242,10 @@ public class DataStorageProvider {
 	}
 
 	public static void deleteStoredRequestResponse(int id) {
+		JsonObject root = rootStorage();
+		JsonObject originals = ensureChild(root, ORIGINALS_KEY);
+		JsonObject sessions = ensureChild(root, SESSIONS_KEY);
+		originals.remove(String.valueOf(id));
 		StoredIndex index = loadIndex();
 		if (index == null) {
 			return;
@@ -256,22 +254,35 @@ public class DataStorageProvider {
 		for (String sessionName : new ArrayList<String>(index.sessions.keySet())) {
 			ArrayList<Integer> ids = index.sessions.get(sessionName);
 			ids.remove(Integer.valueOf(id));
+			JsonObject sessionObject = getChildObject(sessions, sanitizePathSegment(sessionName));
+			if (sessionObject != null) {
+				sessionObject.remove(String.valueOf(id));
+			}
 			if (ids.isEmpty()) {
 				index.sessions.remove(sessionName);
+				sessions.remove(sanitizePathSegment(sessionName));
 			}
 		}
+		saveRootStorage(root);
 		saveIndex(index);
 		BurpExtender.callbacks.printOutput("[AuthAnalyzer][delete-stored] id=" + id + " updatedIndex originalIds="
 				+ index.originalIds + " sessionNames=" + index.sessions.keySet());
 	}
 
 	public static void clearStoredMessages() {
-		BurpExtender.callbacks.printOutput("[AuthAnalyzer][clear-stored] resetting index only; keeping historical sitemap payloads untouched");
-		saveIndex(new StoredIndex());
+		BurpExtender.callbacks.printOutput("[AuthAnalyzer][clear-stored] clearing ProjectData originals/sessions/index");
+		JsonObject root = rootStorage();
+		root.remove(ORIGINALS_KEY);
+		root.remove(SESSIONS_KEY);
+		root.remove(INDEX_KEY);
+		saveRootStorage(root);
 	}
 
 	private static void saveOriginalRequestResponse(StoredOriginalRequestResponse stored) {
-		storeJsonMessage(ORIGINAL_BASE_PATH + stored.getId(), GSON.toJson(stored));
+		JsonObject root = rootStorage();
+		JsonObject originals = ensureChild(root, ORIGINALS_KEY);
+		storeJsonObject(originals, String.valueOf(stored.getId()), GSON.toJson(stored));
+		saveRootStorage(root);
 		StoredIndex index = loadIndex();
 		if (!index.originalIds.contains(stored.getId())) {
 			index.originalIds.add(stored.getId());
@@ -281,11 +292,15 @@ public class DataStorageProvider {
 	}
 
 	private static void saveSessionRequestResponse(String sessionName, int id, StoredAnalyzerRequestResponse stored) {
-		String path = getSessionPath(sessionName, id);
+		String key = String.valueOf(id);
 		String json = GSON.toJson(stored);
 		BurpExtender.callbacks.printOutput("[AuthAnalyzer][store-session-persist] session=" + sessionName + " id=" + id
-				+ " path=" + path + " jsonLen=" + (json == null ? -1 : json.length()));
-		storeJsonMessage(path, json);
+				+ " jsonLen=" + (json == null ? -1 : json.length()));
+		JsonObject root = rootStorage();
+		JsonObject sessions = ensureChild(root, SESSIONS_KEY);
+		JsonObject sessionObject = ensureChild(sessions, sanitizePathSegment(sessionName));
+		storeJsonObject(sessionObject, key, json);
+		saveRootStorage(root);
 		StoredIndex index = loadIndex();
 		ArrayList<Integer> ids = index.sessions.get(sessionName);
 		if (ids == null) {
@@ -302,13 +317,15 @@ public class DataStorageProvider {
 	}
 
 	private static StoredOriginalRequestResponse loadStoredOriginal(int id) {
-		return readJsonMessage(ORIGINAL_BASE_PATH + id, StoredOriginalRequestResponse.class);
+		JsonObject originals = ensureChild(rootStorage(), ORIGINALS_KEY);
+		return readJsonObject(originals, String.valueOf(id), StoredOriginalRequestResponse.class);
 	}
 
 	private static StoredAnalyzerRequestResponse loadStoredSession(String sessionName, int id) {
-		String path = getSessionPath(sessionName, id);
-		BurpExtender.callbacks.printOutput("[AuthAnalyzer][load-session] session=" + sessionName + " id=" + id + " path=" + path);
-		StoredAnalyzerRequestResponse stored = readJsonMessage(path, StoredAnalyzerRequestResponse.class);
+		JsonObject sessions = ensureChild(rootStorage(), SESSIONS_KEY);
+		JsonObject sessionObject = getChildObject(sessions, sanitizePathSegment(sessionName));
+		BurpExtender.callbacks.printOutput("[AuthAnalyzer][load-session] session=" + sessionName + " id=" + id);
+		StoredAnalyzerRequestResponse stored = readJsonObject(sessionObject, String.valueOf(id), StoredAnalyzerRequestResponse.class);
 		BurpExtender.callbacks.printOutput(String.format(
 				"[AuthAnalyzer][load-session] session=%s id=%d stored=%s req=%d resp=%d status=%s info=%s",
 				sessionName, id, stored == null ? "null" : "ok",
@@ -319,103 +336,73 @@ public class DataStorageProvider {
 		return stored;
 	}
 
-	private static <T> T readJsonMessage(String path, Class<T> type) {
-		IHttpRequestResponse[] messages = BurpExtender.callbacks.getSiteMap(HTTPSERVICE.toString() + path);
-		BurpExtender.callbacks.printOutput("[AuthAnalyzer][read-json] path=" + path + " entries=" + messages.length);
-		if (messages.length == 0) {
+	private static <T> T readJsonObject(JsonObject parent, String key, Class<T> type) {
+		if (parent == null) {
 			return null;
 		}
-		for (int i = messages.length - 1; i >= 0; i--) {
-			try {
-				byte[] response = messages[i].getResponse();
-				BurpExtender.callbacks.printOutput("[AuthAnalyzer][read-json] path=" + path + " candidateIndex=" + i + " responseBytes=" + (response == null ? -1 : response.length));
-				if (response == null || response.length == 0) {
-					continue;
-				}
-				return GSON.fromJson(new String(response), type);
-			} catch (Exception e) {
-				BurpExtender.callbacks.printOutput("[AuthAnalyzer][read-json][error] path=" + path + " candidateIndex=" + i + " msg=" + e.getMessage());
-			}
-		}
-		return null;
-	}
-
-	private static void storeJsonMessage(String path, String jsonBody) {
-		BurpExtender.callbacks.printOutput("[AuthAnalyzer][store-json] path=" + path + " bodyLen=" + (jsonBody == null ? -1 : jsonBody.length()));
-		IHttpRequestResponse message = buildStorageMessage(path, jsonBody == null ? null : jsonBody.getBytes());
-		if (message != null) {
-			BurpExtender.callbacks.addToSiteMap(message);
-			IHttpRequestResponse[] messages = BurpExtender.callbacks.getSiteMap(HTTPSERVICE.toString() + path);
-			BurpExtender.callbacks.printOutput("[AuthAnalyzer][store-json] path=" + path + " entriesAfterWrite=" + messages.length);
-		}
-	}
-
-	private static void deletePath(String path) {
-		// Burp Extender API does not expose removeFromSiteMap; overwrite the path with an empty payload instead.
-		storeJsonMessage(path, null);
-	}
-
-	private static IHttpRequestResponse getSettingsMessage() {
-		return buildStorageMessage(SETTINGS_PATH, getSetupAsJsonString().getBytes());
-	}
-
-	private static IHttpRequestResponse buildStorageMessage(String path, byte[] responseBytes) {
-		URL url = null;
 		try {
-			url = new URL(HTTPSERVICE.getProtocol(), HTTPSERVICE.getHost(), HTTPSERVICE.getPort(), path);
-		} catch (MalformedURLException e) {
+			String json = parent.has(key) && !parent.get(key).isJsonNull() ? parent.get(key).getAsString() : null;
+			BurpExtender.callbacks.printOutput("[AuthAnalyzer][read-json] key=" + key + " exists=" + (json != null)
+					+ " bodyLen=" + (json == null ? -1 : json.length()));
+			if (json == null || json.isEmpty()) {
+				return null;
+			}
+			return GSON.fromJson(json, type);
+		} catch (Exception e) {
+			BurpExtender.callbacks.printOutput("[AuthAnalyzer][read-json][error] key=" + key + " msg=" + e.getMessage());
 			return null;
 		}
-		byte[] request = BurpExtender.callbacks.getHelpers().buildHttpRequest(url);
-		final byte[] finalResponseBytes = responseBytes;
-		IHttpRequestResponse message = new IHttpRequestResponse() {
+	}
 
-			@Override
-			public void setResponse(byte[] message) {
-			}
+	private static void storeJsonObject(JsonObject parent, String key, String jsonBody) {
+		if (parent == null) {
+			return;
+		}
+		BurpExtender.callbacks.printOutput("[AuthAnalyzer][store-json] key=" + key + " bodyLen=" + (jsonBody == null ? -1 : jsonBody.length()));
+		if (jsonBody == null) {
+			parent.remove(key);
+		} else {
+			parent.addProperty(key, jsonBody);
+		}
+	}
 
-			@Override
-			public void setRequest(byte[] message) {
-			}
+	private static JsonObject rootStorage() {
+		String json = BurpExtender.callbacks.loadExtensionSetting(ROOT_KEY);
+		if (json == null || json.trim().isEmpty()) {
+			return new JsonObject();
+		}
+		try {
+			return JsonParser.parseString(json).getAsJsonObject();
+		} catch (Exception e) {
+			BurpExtender.callbacks.printOutput("[AuthAnalyzer][root-storage][error] failed to parse settings JSON: " + e.getMessage());
+			return new JsonObject();
+		}
+	}
 
-			@Override
-			public void setHttpService(IHttpService httpService) {
-			}
+	private static void saveRootStorage(JsonObject root) {
+		BurpExtender.callbacks.saveExtensionSetting(ROOT_KEY, root == null ? null : root.toString());
+	}
 
-			@Override
-			public void setHighlight(String color) {
-			}
+	private static JsonObject ensureChild(JsonObject parent, String key) {
+		JsonObject child = getChildObject(parent, key);
+		if (child == null) {
+			child = new JsonObject();
+			parent.add(key, child);
+		}
+		return child;
+	}
 
-			@Override
-			public void setComment(String comment) {
-			}
+	private static JsonObject getChildObject(JsonObject parent, String key) {
+		if (parent == null || !parent.has(key) || !parent.get(key).isJsonObject()) {
+			return null;
+		}
+		return parent.getAsJsonObject(key);
+	}
 
-			@Override
-			public byte[] getResponse() {
-				return finalResponseBytes;
-			}
-
-			@Override
-			public byte[] getRequest() {
-				return request;
-			}
-
-			@Override
-			public IHttpService getHttpService() {
-				return HTTPSERVICE;
-			}
-
-			@Override
-			public String getHighlight() {
-				return null;
-			}
-
-			@Override
-			public String getComment() {
-				return null;
-			}
-		};
-		return message;
+	private static void clearChildObject(JsonObject parent) {
+		for (String key : new ArrayList<String>(parent.keySet())) {
+			parent.remove(key);
+		}
 	}
 
 	private static StoredHttpMessage toStoredHttpMessage(IHttpRequestResponse message) {
@@ -483,16 +470,15 @@ public class DataStorageProvider {
 		};
 	}
 
-	private static String getSessionPath(String sessionName, int id) {
-		return SESSION_BASE_PATH + sanitizePathSegment(sessionName) + "/" + id;
-	}
 
 	private static String sanitizePathSegment(String value) {
 		return value.replaceAll("[^a-zA-Z0-9._-]", "_");
 	}
 
 	private static StoredIndex loadIndex() {
-		StoredIndex index = readJsonMessage(INDEX_PATH, StoredIndex.class);
+		JsonObject root = rootStorage();
+		String json = root.has(INDEX_KEY) && !root.get(INDEX_KEY).isJsonNull() ? root.get(INDEX_KEY).getAsString() : null;
+		StoredIndex index = json == null ? null : GSON.fromJson(json, StoredIndex.class);
 		if (index == null) {
 			index = new StoredIndex();
 		}
@@ -515,7 +501,9 @@ public class DataStorageProvider {
 				index.originalIds == null ? -1 : index.originalIds.size(),
 				index.sessions == null ? -1 : index.sessions.size(),
 				index.sessions));
-		storeJsonMessage(INDEX_PATH, GSON.toJson(index));
+		JsonObject root = rootStorage();
+		root.addProperty(INDEX_KEY, GSON.toJson(index));
+		saveRootStorage(root);
 	}
 
 	private static class StoredIndex {
