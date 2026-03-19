@@ -33,7 +33,7 @@ public class LegacyCallbackStub implements IBurpExtenderCallbacks {
 	public void printError(String error) { api.logging().logToError(error); }
 	@Override
 	public void registerContextMenuFactory(IContextMenuFactory factory) {
-		api.logging().logToOutput("[AuthAnalyzer][startup] registerContextMenuFactory is a no-op in Montoya single-entry mode");
+		api.userInterface().registerContextMenuItemsProvider(new LegacyContextMenuProvider(factory));
 	}
 	@Override
 	public IMessageEditor createMessageEditor(IMessageEditorController controller, boolean editable) { return new LegacyMessageEditorAdapter(api, controller, editable); }
@@ -101,22 +101,41 @@ public class LegacyCallbackStub implements IBurpExtenderCallbacks {
 	@Override public IScanQueueItem doActiveScan(String host, int port, boolean useHttps, byte[] request) { throw unsupported(); }
 	@Override public IScanQueueItem doActiveScan(String host, int port, boolean useHttps, byte[] request, List<int[]> insertionPointOffsets) { throw unsupported(); }
 	@Override public void doPassiveScan(String host, int port, boolean useHttps, byte[] request, byte[] response) { throw unsupported(); }
-	@Override public IHttpRequestResponse makeHttpRequest(IHttpService httpService, byte[] request) { throw unsupported(); }
-	@Override public IHttpRequestResponse makeHttpRequest(IHttpService httpService, byte[] request, boolean forceHttp1) { throw unsupported(); }
+	@Override
+	public IHttpRequestResponse makeHttpRequest(IHttpService httpService, byte[] request) {
+		burp.api.montoya.http.HttpService service = burp.api.montoya.http.HttpService.httpService(
+			httpService.getHost(), httpService.getPort(), "https".equalsIgnoreCase(httpService.getProtocol()));
+		burp.api.montoya.http.message.requests.HttpRequest montoyaRequest = burp.api.montoya.http.message.requests.HttpRequest.httpRequest(
+			service, new String(request, java.nio.charset.StandardCharsets.ISO_8859_1));
+		return new MontoyaHttpRequestResponseAdapter(api.http().sendRequest(montoyaRequest));
+	}
+	@Override
+	public IHttpRequestResponse makeHttpRequest(IHttpService httpService, byte[] request, boolean forceHttp1) {
+		return makeHttpRequest(httpService, request);
+	}
 	@Override public byte[] makeHttpRequest(String host, int port, boolean useHttps, byte[] request) { throw unsupported(); }
 	@Override public byte[] makeHttpRequest(String host, int port, boolean useHttps, byte[] request, boolean forceHttp1) { throw unsupported(); }
 	@Override public byte[] makeHttp2Request(IHttpService httpService, List<IHttpHeader> headers, byte[] body) { throw unsupported(); }
 	@Override public byte[] makeHttp2Request(IHttpService httpService, List<IHttpHeader> headers, byte[] body, boolean forceHttp2) { throw unsupported(); }
 	@Override public byte[] makeHttp2Request(IHttpService httpService, List<IHttpHeader> headers, byte[] body, boolean forceHttp2, String connectionIdentifier) { throw unsupported(); }
-	@Override public boolean isInScope(URL url) { throw unsupported(); }
+	@Override public boolean isInScope(URL url) { return url != null && api.scope().isInScope(url.toString()); }
 	@Override public void includeInScope(URL url) { throw unsupported(); }
 	@Override public void excludeFromScope(URL url) { throw unsupported(); }
 	@Override public IHttpRequestResponse[] getProxyHistory() { throw unsupported(); }
 	@Override public IHttpRequestResponse[] getSiteMap(String urlPrefix) { throw unsupported(); }
 	@Override public IScanIssue[] getScanIssues(String urlPrefix) { throw unsupported(); }
 	@Override public void generateScanReport(String format, IScanIssue[] issues, java.io.File file) { throw unsupported(); }
-	@Override public List<ICookie> getCookieJarContents() { return Collections.emptyList(); }
-	@Override public void updateCookieJar(ICookie cookie) { throw unsupported(); }
+	@Override
+	public List<ICookie> getCookieJarContents() {
+		List<ICookie> cookies = new java.util.ArrayList<ICookie>();
+		api.http().cookieJar().cookies().forEach(c -> cookies.add(MontoyaObjectFactory.cookie(c.name(), c.value(), c.domain(), c.path(), c.expiration().orElse(null))));
+		return cookies;
+	}
+	@Override
+	public void updateCookieJar(ICookie cookie) {
+		api.http().cookieJar().setCookie(cookie.getName(), cookie.getValue(), cookie.getDomain(), cookie.getPath(),
+			cookie.getExpiration() == null ? null : java.time.ZonedDateTime.ofInstant(cookie.getExpiration().toInstant(), java.time.ZoneOffset.UTC));
+	}
 	@Override public void addToSiteMap(IHttpRequestResponse item) { throw unsupported(); }
 	@Override public void restoreState(java.io.File file) { throw unsupported(); }
 	@Override public void saveState(java.io.File file) { throw unsupported(); }

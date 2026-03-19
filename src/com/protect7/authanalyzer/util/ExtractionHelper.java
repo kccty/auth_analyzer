@@ -29,8 +29,50 @@ import burp.IHttpRequestResponse;
 import burp.IParameter;
 import burp.IRequestInfo;
 import burp.IResponseInfo;
+import burp.api.montoya.http.message.responses.HttpResponse;
 
 public class ExtractionHelper {
+
+	public static boolean extractCurrentTokenValue(HttpResponse sessionResponse, Token token) {
+		if (sessionResponse == null) {
+			return false;
+		}
+		if(token.doAutoExtractAtLocation(AutoExtractLocation.COOKIE)) {
+			sessionResponse.cookies().forEach(cookie -> {
+				if (cookie.name().equals(token.getExtractName())) {
+					token.setValue(cookie.value());
+				}
+			});
+			if (token.getValue() != null) {
+				return true;
+			}
+		}
+		String statedMimeType = sessionResponse.statedMimeType() == null ? "" : String.valueOf(sessionResponse.statedMimeType());
+		String inferredMimeType = sessionResponse.inferredMimeType() == null ? "" : String.valueOf(sessionResponse.inferredMimeType());
+		if (token.doAutoExtractAtLocation(AutoExtractLocation.HTML) && (statedMimeType.equals("HTML") || inferredMimeType.equals("HTML"))) {
+			try {
+				String bodyAsString = sessionResponse.bodyToString();
+				String value = getTokenValueFromInputField(bodyAsString, token.getExtractName());
+				if (value != null) {
+					token.setValue(value);
+					return true;
+				}
+			} catch (Exception e) {
+				BurpExtender.callbacks.printError("Can not parse HTML Response. Error Message: " + e.getMessage());
+			}
+		}
+		if (token.doAutoExtractAtLocation(AutoExtractLocation.JSON) && (statedMimeType.equals("JSON") || inferredMimeType.equals("JSON"))) {
+			JsonElement jsonElement = getBodyAsJson(sessionResponse);
+			if(jsonElement != null) {
+				String value = getJsonTokenValue(jsonElement, token);
+				if (value != null) {
+					token.setValue(value);
+					return true;
+				}
+			}
+		}
+		return false;
+	}
 
 	public static boolean extractCurrentTokenValue(byte[] sessionResponse, IResponseInfo sessionResponseInfo, Token token) {
 		if(token.doAutoExtractAtLocation(AutoExtractLocation.COOKIE)) {
@@ -83,6 +125,61 @@ public class ExtractionHelper {
 			}
 		}
 		return null;
+	}
+
+	public static boolean extractTokenWithFromToString(HttpResponse sessionResponse, Token token) {
+		try {
+			if (sessionResponse == null) {
+				return false;
+			}
+			String statedMimeType = sessionResponse.statedMimeType() == null ? "" : String.valueOf(sessionResponse.statedMimeType()).toUpperCase();
+			String inferredMimeType = sessionResponse.inferredMimeType() == null ? "" : String.valueOf(sessionResponse.inferredMimeType()).toUpperCase();
+			boolean doExtract = token.doFromToExtractAtLocation(FromToExtractLocation.ALL);
+			for(FromToExtractLocation locationType : FromToExtractLocation.values()) {
+				if(locationType != FromToExtractLocation.ALL && locationType != FromToExtractLocation.HEADER && locationType != FromToExtractLocation.BODY) {
+					if (token.doFromToExtractAtLocation(locationType) && (statedMimeType.equals(locationType.toString())
+							|| inferredMimeType.equals(locationType.toString()))) {
+						doExtract = true;
+						break;
+					}
+				}
+			}
+			if(inferredMimeType.equals("") && statedMimeType.equals("")) {
+				doExtract = true;
+			}
+			if(doExtract) {
+				String responseAsString = null;
+				if(token.doFromToExtractAtLocation(FromToExtractLocation.HEADER) && token.doFromToExtractAtLocation(FromToExtractLocation.BODY)) {
+					responseAsString = sessionResponse.toString();
+				}
+				else if(token.doFromToExtractAtLocation(FromToExtractLocation.HEADER) && !token.doFromToExtractAtLocation(FromToExtractLocation.BODY)) {
+					responseAsString = sessionResponse.toString().substring(0, sessionResponse.bodyOffset());
+				}
+				else if(!token.doFromToExtractAtLocation(FromToExtractLocation.HEADER) && token.doFromToExtractAtLocation(FromToExtractLocation.BODY)) {
+					responseAsString = sessionResponse.bodyToString();
+				}
+				if(responseAsString != null) {
+					int beginIndex = responseAsString.indexOf(token.getGrepFromString());
+					if (beginIndex != -1) {
+						beginIndex = beginIndex + token.getGrepFromString().length();
+						String lineWithValue = responseAsString.substring(beginIndex).split("\n")[0];
+						String value = null;
+						if (token.getGrepToString().equals("")) {
+							value = lineWithValue;
+						} else if (lineWithValue.contains(token.getGrepToString())) {
+							value = lineWithValue.substring(0, lineWithValue.indexOf(token.getGrepToString()));
+						}
+						if (value != null) {
+							token.setValue(value);
+							return true;
+						}
+					}
+				}
+			}
+		} catch (Exception e) {
+			BurpExtender.callbacks.printError("Can not extract from to value. Error Message: " + e.getMessage());
+		}
+		return false;
 	}
 
 	public static boolean extractTokenWithFromToString(byte[] sessionResponse, IResponseInfo responseInfo, Token token) {
@@ -163,6 +260,19 @@ public class ExtractionHelper {
 		return null;
 	}
 	
+	private static JsonElement getBodyAsJson(HttpResponse response) {
+		try {
+			String bodyAsString = response.bodyToString();
+			JsonReader reader = new JsonReader(new StringReader(bodyAsString));
+			reader.setLenient(true);
+			JsonElement jsonElement = JsonParser.parseReader(reader);
+			return jsonElement;
+		} catch (Exception e) {
+			BurpExtender.callbacks.printError("Can not parse JSON Response. Error Message: " + e.getMessage());
+		}
+		return null;
+	}
+
 	private static JsonElement getBodyAsJson(byte[] response, IResponseInfo responseInfo) {
 		try {
 			String bodyAsString = new String(Arrays.copyOfRange(response,

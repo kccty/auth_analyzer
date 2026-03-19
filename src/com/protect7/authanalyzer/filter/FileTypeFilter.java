@@ -1,9 +1,5 @@
 package com.protect7.authanalyzer.filter;
 
-import burp.IBurpExtenderCallbacks;
-import burp.IRequestInfo;
-import burp.IResponseInfo;
-
 public class FileTypeFilter extends RequestFilter {
 	
 
@@ -13,15 +9,16 @@ public class FileTypeFilter extends RequestFilter {
 	}
 	
 	@Override
-	public boolean filterRequest(IBurpExtenderCallbacks callbacks, int toolFlag, IRequestInfo requestInfo, IResponseInfo responseInfo) {		
+	public boolean filterRequest(RequestFilterContext context) {
 		if(onOffButton.isSelected()) {
-			String url = requestInfo.getUrl().getPath().toString().toLowerCase();
+			String path = context.getPath() == null ? "" : context.getPath().toLowerCase();
+			String inferredMimeType = context.getInferredMimeType() == null ? "" : context.getInferredMimeType().toLowerCase();
 			for(String fileType : stringLiterals) {
-				if(url.endsWith(fileType.toLowerCase()) && !fileType.equals("")) {
+				if(path.endsWith(fileType.toLowerCase()) && !fileType.equals("")) {
 					incrementFiltered();
 					return true;
 				}
-				else if(responseInfo != null && fileType.toLowerCase().equals(responseInfo.getInferredMimeType().toLowerCase())) {
+				else if(!inferredMimeType.isEmpty() && fileType.toLowerCase().equals(inferredMimeType)) {
 					incrementFiltered();
 					return true;
 				}

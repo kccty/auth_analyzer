@@ -11,6 +11,8 @@ import com.protect7.authanalyzer.gui.util.RequestTableModel;
 
 import burp.BurpExtender;
 import burp.IHttpRequestResponse;
+import burp.api.montoya.http.message.requests.HttpRequest;
+import burp.api.montoya.http.message.responses.HttpResponse;
 
 public class CurrentConfig {
 
@@ -41,6 +43,24 @@ public class CurrentConfig {
 				BurpExtender.mainPanel.getCenterPanel().updateAmountOfPendingRequests(
 						analyzerThreadExecutor.getQueue().size());
 				getRequestController().analyze(messageInfo);
+				try {
+					Thread.sleep(delayBetweenRequestsInMilliseconds);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+		});
+		BurpExtender.mainPanel.getCenterPanel().updateAmountOfPendingRequests(
+				analyzerThreadExecutor.getQueue().size());
+	}
+
+	public void performAuthAnalyzerRequest(HttpRequest request, HttpResponse response, int toolFlag) {
+		analyzerThreadExecutor.execute(new Runnable() {
+			@Override
+			public void run() {
+				BurpExtender.mainPanel.getCenterPanel().updateAmountOfPendingRequests(
+						analyzerThreadExecutor.getQueue().size());
+				getRequestController().analyze(request, response, toolFlag);
 				try {
 					Thread.sleep(delayBetweenRequestsInMilliseconds);
 				} catch (InterruptedException e) {

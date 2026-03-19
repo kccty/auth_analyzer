@@ -1,9 +1,5 @@
 package com.protect7.authanalyzer.filter;
 
-import burp.IBurpExtenderCallbacks;
-import burp.IRequestInfo;
-import burp.IResponseInfo;
-
 public class MethodFilter extends RequestFilter {
 	
 	public MethodFilter(int filterIndex, String description) {
@@ -12,9 +8,9 @@ public class MethodFilter extends RequestFilter {
 	}
 
 	@Override
-	public boolean filterRequest(IBurpExtenderCallbacks callbacks, int toolFlag, IRequestInfo requestInfo, IResponseInfo responseInfo) {
-		if(onOffButton.isSelected()) {		
-			String requestMethod = requestInfo.getMethod();
+	public boolean filterRequest(RequestFilterContext context) {
+		if(onOffButton.isSelected()) {
+			String requestMethod = context.getMethod() == null ? "" : context.getMethod();
 			for(String method : stringLiterals) {
 				if(requestMethod.toLowerCase().equals(method.toLowerCase()) && !method.trim().equals("")) {
 					incrementFiltered();

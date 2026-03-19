@@ -53,9 +53,11 @@ import com.protect7.authanalyzer.util.Diff_match_patch.Diff;
 import com.protect7.authanalyzer.util.Diff_match_patch.LinesToCharsResult;
 import burp.BurpExtender;
 import burp.IHttpRequestResponse;
-import burp.IHttpService;
-import burp.IMessageEditor;
-import burp.IMessageEditorController;
+import burp.api.montoya.core.ByteArray;
+import burp.api.montoya.http.message.HttpRequestResponse;
+import burp.api.montoya.ui.editor.EditorOptions;
+import burp.api.montoya.ui.editor.HttpRequestEditor;
+import burp.api.montoya.ui.editor.HttpResponseEditor;
 
 public class CenterPanel extends JPanel {
 
@@ -271,7 +273,7 @@ public class CenterPanel extends JPanel {
 	}
 
 	private void loadTableSettings() {
-		String savedSettings = BurpExtender.callbacks.loadExtensionSetting(TABLE_SETTINGS);
+		String savedSettings = BurpExtender.montoyaApi.persistence().preferences().getString(TABLE_SETTINGS);
 		if (savedSettings != null) {
 			String[] split = savedSettings.split(",");
 			for (String columnAsString : split) {
@@ -607,105 +609,35 @@ public class CenterPanel extends JPanel {
 			if (force || (originalRequestResponse != null && selectedId != originalRequestResponse.getId())) {
 				selectedId = originalRequestResponse.getId();
 				boolean compareViewVisible = changeMessageViewButton.getText().equals(BUTTON_TEXT_SINGLE_VIEW);
-				IMessageEditorController controllerOriginal = new CustomIMessageEditorController(
-						originalRequestResponse.getRequestResponse().getHttpService(),
-						originalRequestResponse.getRequestResponse().getRequest(),
-						originalRequestResponse.getRequestResponse().getResponse());
-				IMessageEditor requestMessageEditorOriginal = BurpExtender.callbacks
-						.createMessageEditor(controllerOriginal, false);
-				requestMessageEditorOriginal.setMessage(originalRequestResponse.getRequestResponse().getRequest(),
-						true);
-				tabbedPanel1.setRequestMessage(tabbedPanel1.TITLE_ORIGINAL, requestMessageEditorOriginal.getComponent(),
-						requestMessageEditorOriginal);
+				setMontoyaEditorsForMessage(tabbedPanel1, tabbedPanel1.TITLE_ORIGINAL, originalRequestResponse.getRequestResponse(), originalRequestResponse.getInfoText());
 				if (compareViewVisible) {
-					IMessageEditor requestMessageEditorOriginal2 = BurpExtender.callbacks
-							.createMessageEditor(controllerOriginal, false);
-					requestMessageEditorOriginal2.setMessage(originalRequestResponse.getRequestResponse().getRequest(),
-							true);
-					tabbedPanel2.setRequestMessage(tabbedPanel1.TITLE_ORIGINAL,
-							requestMessageEditorOriginal2.getComponent(), requestMessageEditorOriginal2);
-				}
-				if (originalRequestResponse.getRequestResponse().getResponse() != null) {
-					IMessageEditor responseMessageEditorOriginal = BurpExtender.callbacks
-							.createMessageEditor(controllerOriginal, false);
-					responseMessageEditorOriginal.setMessage(originalRequestResponse.getRequestResponse().getResponse(),
-							false);
-					tabbedPanel1.setResponseMessage(tabbedPanel1.TITLE_ORIGINAL,
-							responseMessageEditorOriginal.getComponent(), responseMessageEditorOriginal);
-					if (compareViewVisible) {
-						IMessageEditor responseMessageEditorOriginal2 = BurpExtender.callbacks
-								.createMessageEditor(controllerOriginal, false);
-						responseMessageEditorOriginal2
-								.setMessage(originalRequestResponse.getRequestResponse().getResponse(), false);
-						tabbedPanel2.setResponseMessage(tabbedPanel1.TITLE_ORIGINAL,
-								responseMessageEditorOriginal2.getComponent(), responseMessageEditorOriginal2);
-					}
-				} else {
-					tabbedPanel1.setResponseMessage(tabbedPanel1.TITLE_ORIGINAL,
-							getMessageViewLabel(originalRequestResponse.getInfoText()), null);
-					if (compareViewVisible) {
-						tabbedPanel2.setResponseMessage(tabbedPanel1.TITLE_ORIGINAL,
-								getMessageViewLabel(originalRequestResponse.getInfoText()), null);
-					}
+					setMontoyaEditorsForMessage(tabbedPanel2, tabbedPanel1.TITLE_ORIGINAL, originalRequestResponse.getRequestResponse(), originalRequestResponse.getInfoText());
 				}
 
 				for (Session session : config.getSessions()) {
-					AnalyzerRequestResponse analyzerRequestResponse = session.getRequestResponseMap()
-							.get(originalRequestResponse.getId());
+					AnalyzerRequestResponse analyzerRequestResponse = session.getRequestResponseMap().get(originalRequestResponse.getId());
 					if (analyzerRequestResponse == null) {
-						tabbedPanel1.setRequestMessage(session.getName(),
-								getMessageViewLabel("No stored analyzer result for request id " + originalRequestResponse.getId()), null);
-						tabbedPanel1.setResponseMessage(session.getName(),
-								getMessageViewLabel("No stored analyzer result for request id " + originalRequestResponse.getId()), null);
+						String text = "No stored analyzer result for request id " + originalRequestResponse.getId();
+						tabbedPanel1.setRequestMessage(session.getName(), getMessageViewLabel(text), null);
+						tabbedPanel1.setResponseMessage(session.getName(), getMessageViewLabel(text), null);
 						if (compareViewVisible) {
-							tabbedPanel2.setRequestMessage(session.getName(),
-									getMessageViewLabel("No stored analyzer result for request id " + originalRequestResponse.getId()), null);
-							tabbedPanel2.setResponseMessage(session.getName(),
-									getMessageViewLabel("No stored analyzer result for request id " + originalRequestResponse.getId()), null);
+							tabbedPanel2.setRequestMessage(session.getName(), getMessageViewLabel(text), null);
+							tabbedPanel2.setResponseMessage(session.getName(), getMessageViewLabel(text), null);
 						}
 						continue;
 					}
 					IHttpRequestResponse sessionRequestResponse = analyzerRequestResponse.getRequestResponse();
 					if (sessionRequestResponse != null) {
-						IMessageEditorController controller = new CustomIMessageEditorController(
-								sessionRequestResponse.getHttpService(), sessionRequestResponse.getRequest(),
-								sessionRequestResponse.getResponse());
-
-						IMessageEditor requestMessageEditor = BurpExtender.callbacks.createMessageEditor(controller,
-								false);
-						requestMessageEditor.setMessage(sessionRequestResponse.getRequest(), true);
-						tabbedPanel1.setRequestMessage(session.getName(), requestMessageEditor.getComponent(),
-								requestMessageEditor);
+						setMontoyaEditorsForMessage(tabbedPanel1, session.getName(), sessionRequestResponse, analyzerRequestResponse.getInfoText());
 						if (compareViewVisible) {
-							IMessageEditor requestMessageEditor2 = BurpExtender.callbacks
-									.createMessageEditor(controller, false);
-							requestMessageEditor2.setMessage(sessionRequestResponse.getRequest(), true);
-							tabbedPanel2.setRequestMessage(session.getName(), requestMessageEditor2.getComponent(),
-									requestMessageEditor2);
-						}
-
-						IMessageEditor responseMessageEditor = BurpExtender.callbacks.createMessageEditor(controller,
-								false);
-						responseMessageEditor.setMessage(sessionRequestResponse.getResponse(), false);
-						tabbedPanel1.setResponseMessage(session.getName(), responseMessageEditor.getComponent(),
-								responseMessageEditor);
-						if (compareViewVisible) {
-							IMessageEditor responseMessageEditor2 = BurpExtender.callbacks
-									.createMessageEditor(controller, false);
-							responseMessageEditor2.setMessage(sessionRequestResponse.getResponse(), false);
-							tabbedPanel2.setResponseMessage(session.getName(), responseMessageEditor2.getComponent(),
-									responseMessageEditor2);
+							setMontoyaEditorsForMessage(tabbedPanel2, session.getName(), sessionRequestResponse, analyzerRequestResponse.getInfoText());
 						}
 					} else {
-						tabbedPanel1.setRequestMessage(session.getName(),
-								getMessageViewLabel(analyzerRequestResponse.getInfoText()), null);
-						tabbedPanel1.setResponseMessage(session.getName(),
-								getMessageViewLabel(analyzerRequestResponse.getInfoText()), null);
+						tabbedPanel1.setRequestMessage(session.getName(), getMessageViewLabel(analyzerRequestResponse.getInfoText()), null);
+						tabbedPanel1.setResponseMessage(session.getName(), getMessageViewLabel(analyzerRequestResponse.getInfoText()), null);
 						if (compareViewVisible) {
-							tabbedPanel2.setRequestMessage(session.getName(),
-									getMessageViewLabel(analyzerRequestResponse.getInfoText()), null);
-							tabbedPanel2.setResponseMessage(session.getName(),
-									getMessageViewLabel(analyzerRequestResponse.getInfoText()), null);
+							tabbedPanel2.setRequestMessage(session.getName(), getMessageViewLabel(analyzerRequestResponse.getInfoText()), null);
+							tabbedPanel2.setResponseMessage(session.getName(), getMessageViewLabel(analyzerRequestResponse.getInfoText()), null);
 						}
 					}
 				}
@@ -719,6 +651,35 @@ public class CenterPanel extends JPanel {
 				});
 			}
 		}
+	}
+
+	private void setMontoyaEditorsForMessage(RequestResponsePanel panel, String sessionName, IHttpRequestResponse message, String infoText) {
+		HttpRequestResponse requestResponse = toMontoyaRequestResponse(message);
+		if (requestResponse == null) {
+			panel.setRequestMessage(sessionName, getMessageViewLabel(infoText), null);
+			panel.setResponseMessage(sessionName, getMessageViewLabel(infoText), null);
+			return;
+		}
+		HttpRequestEditor requestEditor = BurpExtender.montoyaApi.userInterface().createHttpRequestEditor(EditorOptions.READ_ONLY);
+		requestEditor.setRequest(requestResponse.request());
+		panel.setRequestMessage(sessionName, requestEditor.uiComponent(), requestEditor);
+		if (requestResponse.response() != null) {
+			HttpResponseEditor responseEditor = BurpExtender.montoyaApi.userInterface().createHttpResponseEditor(EditorOptions.READ_ONLY);
+			responseEditor.setResponse(requestResponse.response());
+			panel.setResponseMessage(sessionName, responseEditor.uiComponent(), responseEditor);
+		}
+		else {
+			panel.setResponseMessage(sessionName, getMessageViewLabel(infoText), null);
+		}
+	}
+
+	private HttpRequestResponse toMontoyaRequestResponse(IHttpRequestResponse message) {
+		if (message == null || message.getRequest() == null) {
+			return null;
+		}
+		return HttpRequestResponse.httpRequestResponse(
+				burp.api.montoya.http.message.requests.HttpRequest.httpRequest(ByteArray.byteArray(message.getRequest())),
+				message.getResponse() == null ? null : burp.api.montoya.http.message.responses.HttpResponse.httpResponse(ByteArray.byteArray(message.getResponse())));
 	}
 
 	private JLabel getMessageViewLabel(String text) {
@@ -814,34 +775,7 @@ public class CenterPanel extends JPanel {
 		}
 		JOptionPane.showConfirmDialog(parent, inputPanel, "Show / Hide Columns", JOptionPane.CLOSED_OPTION);
 		String saveString = columnSet.toString().replaceAll(" ", "").replace("[", "").replace("]", "");
-		BurpExtender.callbacks.saveExtensionSetting(TABLE_SETTINGS, saveString);
+		BurpExtender.montoyaApi.persistence().preferences().setString(TABLE_SETTINGS, saveString);
 	}
 
-	private class CustomIMessageEditorController implements IMessageEditorController {
-
-		private final IHttpService httpService;
-		private final byte[] request;
-		private final byte[] response;
-
-		public CustomIMessageEditorController(IHttpService httpService, byte[] request, byte[] response) {
-			this.httpService = httpService;
-			this.request = request;
-			this.response = response;
-		}
-
-		@Override
-		public IHttpService getHttpService() {
-			return httpService;
-		}
-
-		@Override
-		public byte[] getRequest() {
-			return request;
-		}
-
-		@Override
-		public byte[] getResponse() {
-			return response;
-		}
-	}
 }

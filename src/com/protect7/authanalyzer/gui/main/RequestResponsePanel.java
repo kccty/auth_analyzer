@@ -7,7 +7,10 @@ import javax.swing.JTabbedPane;
 
 import com.protect7.authanalyzer.entities.Session;
 import com.protect7.authanalyzer.util.CurrentConfig;
-import burp.IMessageEditor;
+import burp.api.montoya.http.message.requests.HttpRequest;
+import burp.api.montoya.http.message.responses.HttpResponse;
+import burp.api.montoya.ui.editor.HttpRequestEditor;
+import burp.api.montoya.ui.editor.HttpResponseEditor;
 
 public class RequestResponsePanel extends JTabbedPane {
 	
@@ -50,13 +53,13 @@ public class RequestResponsePanel extends JTabbedPane {
 		}
 	}
 	
-	public void setRequestMessage(String sessionName, Component component, IMessageEditor messageEditor) {
+	public void setRequestMessage(String sessionName, Component component, HttpRequestEditor messageEditor) {
 		if(sessionTabbedPaneMap.containsKey(sessionName)) {
 			sessionTabbedPaneMap.get(sessionName).setRequestMessage(component, messageEditor);
 		}
 	}
 	
-	public void setResponseMessage(String sessionName, Component component, IMessageEditor messageEditor) {
+	public void setResponseMessage(String sessionName, Component component, HttpResponseEditor messageEditor) {
 		if(sessionTabbedPaneMap.containsKey(sessionName)) {
 			sessionTabbedPaneMap.get(sessionName).setResponseMessage(component, messageEditor);
 		}
@@ -104,8 +107,10 @@ public class RequestResponsePanel extends JTabbedPane {
 		private static final long serialVersionUID = -4100725845615986632L;
 		private final String TITLE_REQUEST = "Request";
 		private final String TITLE_RESPONSE = "Response";
-		private IMessageEditor requestMessageEditor = null;
-		private IMessageEditor responseMessageEditor = null;
+		private HttpRequestEditor requestMessageEditor = null;
+		private HttpResponseEditor responseMessageEditor = null;
+		private HttpRequest requestMessage = null;
+		private HttpResponse responseMessage = null;
 		
 		public SessionTabbedPane(String name) {
 			add(TITLE_REQUEST, new JPanel());
@@ -116,25 +121,27 @@ public class RequestResponsePanel extends JTabbedPane {
 			});
 		}
 		
-		public void setRequestMessage(Component component, IMessageEditor messageEditor) {
+		public void setRequestMessage(Component component, HttpRequestEditor messageEditor) {
 			requestMessageEditor = messageEditor;
+			requestMessage = messageEditor == null ? null : messageEditor.getRequest();
 			setComponentAt(0, component);
 		}
 		
-		public void setResponseMessage(Component component, IMessageEditor messageEditor) {
+		public void setResponseMessage(Component component, HttpResponseEditor messageEditor) {
 			responseMessageEditor = messageEditor;
+			responseMessage = messageEditor == null ? null : messageEditor.getResponse();
 			setComponentAt(1, component);
 		}
 		
 		public String getCurrentMessageString() {
 			if(getSelectedIndex() == 0) {
-				if(requestMessageEditor != null) {
-					return new String(requestMessageEditor.getMessage());
+				if(requestMessage != null) {
+					return requestMessage.toString();
 				}
 			}
 			if(getSelectedIndex() == 1) {
-				if(responseMessageEditor != null) {
-					return new String(responseMessageEditor.getMessage());
+				if(responseMessage != null) {
+					return responseMessage.toString();
 				}
 			}
 			return null;

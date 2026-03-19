@@ -11,6 +11,9 @@ package com.protect7.authanalyzer.controller;
 import java.net.URL;
 import java.util.Arrays;
 import java.util.List;
+
+import burp.api.montoya.http.message.requests.HttpRequest;
+import burp.api.montoya.http.message.responses.HttpResponse;
 import com.protect7.authanalyzer.entities.AnalyzerRequestResponse;
 import com.protect7.authanalyzer.entities.OriginalRequestResponse;
 import com.protect7.authanalyzer.entities.Session;
@@ -21,6 +24,7 @@ import com.protect7.authanalyzer.util.CurrentConfig;
 import com.protect7.authanalyzer.util.DataStorageProvider;
 import com.protect7.authanalyzer.util.ExtractionHelper;
 import com.protect7.authanalyzer.util.GenericHelper;
+import com.protect7.authanalyzer.util.MontoyaRequestBuilder;
 import com.protect7.authanalyzer.util.RequestModifHelper;
 import burp.BurpExtender;
 import burp.IHttpRequestResponse;
@@ -28,6 +32,83 @@ import burp.IRequestInfo;
 import burp.IResponseInfo;
 
 public class RequestController {
+
+	public void analyze(HttpRequest originalRequest, HttpResponse originalResponse, int toolFlag) {
+		if (originalRequest == null) {
+			BurpExtender.callbacks.printError("Cannot analyze request with null values.");
+			return;
+		}
+		int mapId = CurrentConfig.getCurrentConfig().getNextMapId();
+		for (Session session : CurrentConfig.getCurrentConfig().getSessions()) {
+			boolean isFiltered = false;
+			if(!session.getStatusPanel().isRunning()) {
+				AnalyzerRequestResponse analyzerRequestResponse = new AnalyzerRequestResponse(
+						null, BypassConstants.NA, "Filtered due to paused session.", -1, -1);
+				session.putRequestResponse(mapId, analyzerRequestResponse);
+				DataStorageProvider.saveSessionRequestResponse(session.getName(), mapId, analyzerRequestResponse);
+				session.getStatusPanel().incrementAmountOfFitleredRequests();
+				isFiltered = true;
+			}
+			else if (session.isRestrictToScope() && !scopeMatches(originalRequest.url(), session)) {
+				AnalyzerRequestResponse analyzerRequestResponse = new AnalyzerRequestResponse(
+						null, BypassConstants.NA, "Filtered due to scope restriction.", -1, -1);
+				session.putRequestResponse(mapId, analyzerRequestResponse);
+				DataStorageProvider.saveSessionRequestResponse(session.getName(), mapId, analyzerRequestResponse);
+				session.getStatusPanel().incrementAmountOfFitleredRequests();
+				isFiltered = true;
+			}
+			if(!isFiltered) {
+				TokenPriority tokenPriority = new TokenPriority();
+				HttpRequest modifiedRequest = MontoyaRequestBuilder.applySession(originalRequest, session, tokenPriority);
+				burp.api.montoya.http.message.HttpRequestResponse sessionRequestResponse = BurpExtender.montoyaApi.http().sendRequest(modifiedRequest);
+				HttpResponse sessionResponse = sessionRequestResponse == null ? null : sessionRequestResponse.response();
+				if (sessionRequestResponse != null && sessionResponse != null) {
+					for (Token token : session.getTokens()) {
+						boolean success = false;
+						if (token.isAutoExtract()) {
+							success = ExtractionHelper.extractCurrentTokenValue(sessionResponse, token);
+						}
+						if (token.isFromToString()) {
+							success = ExtractionHelper.extractTokenWithFromToString(sessionResponse, token);
+						}
+						if(success) {
+							session.getStatusPanel().updateTokenStatus(token);
+							if(token.getRequestResponse() == null || token.getPriority() <= tokenPriority.getPriority()) {
+								token.setRequestResponse(new burp.MontoyaHttpRequestResponseAdapter(sessionRequestResponse));
+								token.setPriority(tokenPriority.getPriority());
+							}
+						}
+					}
+					BypassConstants bypassConstant = originalResponse == null ? BypassConstants.NA
+							: analyzeResponse(originalResponse, sessionResponse);
+					AnalyzerRequestResponse analyzerRequestResponse = new AnalyzerRequestResponse(
+							new burp.MontoyaHttpRequestResponseAdapter(sessionRequestResponse), bypassConstant, null,
+							sessionResponse.statusCode(), sessionResponse.body().length());
+					session.putRequestResponse(mapId, analyzerRequestResponse);
+					DataStorageProvider.saveSessionRequestResponse(session.getName(), mapId, analyzerRequestResponse);
+				}
+				else {
+					AnalyzerRequestResponse analyzerRequestResponse = new AnalyzerRequestResponse(
+							null, BypassConstants.NA, "Session Request / Response is null. Probably no response received from server.", -1, -1);
+					session.putRequestResponse(mapId, analyzerRequestResponse);
+					DataStorageProvider.saveSessionRequestResponse(session.getName(), mapId, analyzerRequestResponse);
+				}
+			}
+		}
+		String url = originalRequest.query() == null ? originalRequest.pathWithoutQuery() : originalRequest.pathWithoutQuery() + "?" + originalRequest.query();
+		String infoText = null;
+		if(originalResponse == null) {
+			infoText = "Request Dropped. No Response to show.";
+		}
+		int originalStatusCode = originalResponse == null ? -1 : originalResponse.statusCode();
+		int originalResponseContentLength = originalResponse == null ? -1 : originalResponse.body().length();
+		OriginalRequestResponse requestResponse = new OriginalRequestResponse(mapId,
+				new burp.MontoyaHttpRequestResponseAdapter(burp.api.montoya.http.message.HttpRequestResponse.httpRequestResponse(originalRequest, originalResponse)),
+				originalRequest.method(), url, infoText, originalStatusCode, originalResponseContentLength);
+		CurrentConfig.getCurrentConfig().getTableModel().addNewRequestResponse(requestResponse);
+		DataStorageProvider.saveOriginalRequestResponse(requestResponse);
+		GenericHelper.animateBurpExtensionTab();
+	}
 
 	public void analyze(IHttpRequestResponse originalRequestResponse) {
 		
@@ -158,6 +239,25 @@ public class RequestController {
 		}
 	}
 	
+	private boolean scopeMatches(String urlString, Session session) {
+		try {
+			if (urlString == null) {
+				return false;
+			}
+			URL url = new URL(urlString);
+			URL scopeUrl = session.getScopeUrl();
+			if(scopeUrl != null) {
+				if(url.getHost().equals(scopeUrl.getHost()) && url.getProtocol().equals(scopeUrl.getProtocol()) &&
+						(url.getPath().equals(scopeUrl.getPath()) || scopeUrl.getPath().equals("") || scopeUrl.getPath().equals("/"))) {
+					return true;
+				}
+			}
+		} catch (Exception e) {
+			BurpExtender.callbacks.printError("Scope match failed: " + e.getMessage());
+		}
+		return false;
+	}
+
 	private boolean scopeMatches(URL url, Session session) {
 		URL scopeUrl = session.getScopeUrl();
 		if(scopeUrl != null) {
@@ -187,6 +287,23 @@ public class RequestController {
 	 * Responses have +-5% of response body length
 	 *
 	 */
+	public BypassConstants analyzeResponse(HttpResponse originalResponse, HttpResponse sessionResponse) {
+		byte[] originalResponseBody = originalResponse.body().getBytes();
+		byte[] sessionResponseBody = sessionResponse.body().getBytes();
+		if (Arrays.equals(originalResponseBody, sessionResponseBody)
+				&& (originalResponse.statusCode() == sessionResponse.statusCode() || !CurrentConfig.getCurrentConfig().isRespectResponseCodeForSameStatus())) {
+			return BypassConstants.SAME;
+		}
+		if (originalResponse.statusCode() == sessionResponse.statusCode() || !CurrentConfig.getCurrentConfig().isRespectResponseCodeForSimilarStatus()) {
+			int range = originalResponseBody.length / (100/CurrentConfig.getCurrentConfig().getDerivationForSimilarStatus());
+			int difference = originalResponseBody.length - sessionResponseBody.length;
+			if (difference <= range && difference >= -range) {
+				return BypassConstants.SIMILAR;
+			}
+		}
+		return BypassConstants.DIFFERENT;
+	}
+
 	public BypassConstants analyzeResponse(byte[] originalResponse, byte[] sessionResponse,
 			IResponseInfo originalResponseInfo, IResponseInfo sessionResponseInfo) {
 		byte[] originalResponseBody = Arrays.copyOfRange(originalResponse, originalResponseInfo.getBodyOffset(),

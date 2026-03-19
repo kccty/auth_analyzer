@@ -1,9 +1,5 @@
 package com.protect7.authanalyzer.filter;
 
-import burp.IBurpExtenderCallbacks;
-import burp.IRequestInfo;
-import burp.IResponseInfo;
-
 public class InScopeFilter extends RequestFilter {
 
 	public InScopeFilter(int filterIndex, String description) {
@@ -11,9 +7,8 @@ public class InScopeFilter extends RequestFilter {
 	}
 
 	@Override
-	public boolean filterRequest(IBurpExtenderCallbacks callbacks, int toolFlag, IRequestInfo requestInfo,
-			IResponseInfo responseInfo) {
-		if (onOffButton.isSelected() && !callbacks.isInScope(requestInfo.getUrl())) {
+	public boolean filterRequest(RequestFilterContext context) {
+		if (onOffButton.isSelected() && !context.isInScope()) {
 			incrementFiltered();
 			return true;
 		}

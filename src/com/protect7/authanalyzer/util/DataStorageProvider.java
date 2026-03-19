@@ -21,6 +21,7 @@ import com.protect7.authanalyzer.storage.StoredOriginalRequestResponse;
 import burp.BurpExtender;
 import burp.IHttpRequestResponse;
 import burp.IHttpService;
+import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.persistence.PersistedObject;
 
 public class DataStorageProvider {
@@ -390,7 +391,10 @@ public class DataStorageProvider {
 	}
 
 	private static StoredHttpMessage toStoredHttpMessage(IHttpRequestResponse message) {
-		if (message == null || message.getHttpService() == null) {
+		if (message == null || message.getRequest() == null) {
+			return null;
+		}
+		if (message.getHttpService() == null) {
 			return null;
 		}
 		IHttpService service = message.getHttpService();
@@ -402,56 +406,10 @@ public class DataStorageProvider {
 		if (stored == null) {
 			return null;
 		}
-		final IHttpService service = BurpExtender.callbacks.getHelpers().buildHttpService(stored.getHost(), stored.getPort(), stored.isHttps());
-		final byte[] request = stored.getRequest();
-		final byte[] response = stored.getResponse();
-		return new IHttpRequestResponse() {
-
-			@Override
-			public void setResponse(byte[] message) {
-			}
-
-			@Override
-			public void setRequest(byte[] message) {
-			}
-
-			@Override
-			public void setHttpService(IHttpService httpService) {
-			}
-
-			@Override
-			public void setHighlight(String color) {
-			}
-
-			@Override
-			public void setComment(String comment) {
-			}
-
-			@Override
-			public byte[] getResponse() {
-				return response;
-			}
-
-			@Override
-			public byte[] getRequest() {
-				return request;
-			}
-
-			@Override
-			public IHttpService getHttpService() {
-				return service;
-			}
-
-			@Override
-			public String getHighlight() {
-				return null;
-			}
-
-			@Override
-			public String getComment() {
-				return null;
-			}
-		};
+		burp.api.montoya.http.HttpService service = burp.api.montoya.http.HttpService.httpService(stored.getHost(), stored.getPort(), stored.isHttps());
+		burp.api.montoya.http.message.requests.HttpRequest request = burp.api.montoya.http.message.requests.HttpRequest.httpRequest(service, ByteArray.byteArray(stored.getRequest()));
+		burp.api.montoya.http.message.responses.HttpResponse response = stored.getResponse() == null ? null : burp.api.montoya.http.message.responses.HttpResponse.httpResponse(ByteArray.byteArray(stored.getResponse()));
+		return new burp.MontoyaHttpRequestResponseAdapter(burp.api.montoya.http.message.HttpRequestResponse.httpRequestResponse(request, response));
 	}
 
 	private static String sanitizePathSegment(String value) {

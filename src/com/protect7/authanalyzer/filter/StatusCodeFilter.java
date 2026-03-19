@@ -1,9 +1,5 @@
 package com.protect7.authanalyzer.filter;
 
-import burp.IBurpExtenderCallbacks;
-import burp.IRequestInfo;
-import burp.IResponseInfo;
-
 public class StatusCodeFilter extends RequestFilter {
 	
 	public StatusCodeFilter(int filterIndex, String description) {
@@ -12,9 +8,9 @@ public class StatusCodeFilter extends RequestFilter {
 	}
 
 	@Override
-	public boolean filterRequest(IBurpExtenderCallbacks callbacks, int toolFlag, IRequestInfo requestInfo, IResponseInfo responseInfo) {
-		if (onOffButton.isSelected() && responseInfo != null) {
-			String statusCode = String.valueOf(responseInfo.getStatusCode());
+	public boolean filterRequest(RequestFilterContext context) {
+		if (onOffButton.isSelected() && context.getStatusCode() != null) {
+			String statusCode = String.valueOf(context.getStatusCode());
 			for (String stringLiteral : stringLiterals) {
 				if (statusCode.equals(stringLiteral.toLowerCase()) && !stringLiteral.trim().equals("")) {
 					incrementFiltered();

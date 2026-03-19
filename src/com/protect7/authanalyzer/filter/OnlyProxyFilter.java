@@ -1,8 +1,6 @@
 package com.protect7.authanalyzer.filter;
 
 import burp.IBurpExtenderCallbacks;
-import burp.IRequestInfo;
-import burp.IResponseInfo;
 
 public class OnlyProxyFilter extends RequestFilter {
 
@@ -11,7 +9,8 @@ public class OnlyProxyFilter extends RequestFilter {
 	}
 
 	@Override
-	public boolean filterRequest(IBurpExtenderCallbacks callbacks, int toolFlag, IRequestInfo requestInfo, IResponseInfo responseInfo) {
+	public boolean filterRequest(RequestFilterContext context) {
+		int toolFlag = context.getToolFlag();
 		if(onOffButton.isSelected()) {
 			if(toolFlag == IBurpExtenderCallbacks.TOOL_PROXY) {
 				return false;

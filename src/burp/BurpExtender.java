@@ -31,6 +31,19 @@ public class BurpExtender implements BurpExtension, ITab {
 		callbacks.setExtensionName(Globals.EXTENSION_NAME);
 		mainPanel = new MainPanel();
 		api.userInterface().registerSuiteTab(getTabCaption(), getUiComponent());
+		api.http().registerHttpHandler(new com.protect7.authanalyzer.controller.MontoyaHttpListener());
+		api.extension().registerUnloadingHandler(() -> {
+			if(authAnalyzerMenu != null && authAnalyzerMenu.getParent() != null) {
+				authAnalyzerMenu.getParent().remove(authAnalyzerMenu);
+			}
+			try {
+				mainPanel.getConfigurationPanel().createSessionObjects(false);
+				DataStorageProvider.saveSetup();
+			}
+			catch (Exception e) {
+				callbacks.printOutput("INFO: Session Setup not stored due to invalid data.");
+			}
+		});
 		addAuthAnalyzerMenu();
 		callbacks.printOutput(Globals.EXTENSION_NAME + " successfully started (Montoya single-entry mode)");
 		callbacks.printOutput("Version " + Globals.VERSION);

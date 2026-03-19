@@ -148,7 +148,7 @@ public class RequestModifHelper {
 		}
 	}
 
-	private static ArrayList<String> getHeaderToReplaceList(Session session) {
+	public static ArrayList<String> getHeaderToReplaceList(Session session) {
 		HashMap<String, String> headerToReplaceMap = new HashMap<String, String>();
 		String[] headersToReplace = session.getHeadersToReplace().replace("\r", "").split("\n");
 		for (String headerToReplace : headersToReplace) {

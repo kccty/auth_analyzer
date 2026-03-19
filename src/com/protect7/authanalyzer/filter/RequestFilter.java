@@ -3,9 +3,6 @@ package com.protect7.authanalyzer.filter;
 import java.awt.Color;
 import com.protect7.authanalyzer.gui.util.HintCheckBox;
 import com.protect7.authanalyzer.util.GenericHelper;
-import burp.IBurpExtenderCallbacks;
-import burp.IRequestInfo;
-import burp.IResponseInfo;
 
 public abstract class RequestFilter {
 	
@@ -43,7 +40,7 @@ public abstract class RequestFilter {
 		}
 	}
 	
-	public abstract boolean filterRequest(IBurpExtenderCallbacks callbacks, int toolFlag, IRequestInfo requestInfo, IResponseInfo responseInfo);
+	public abstract boolean filterRequest(RequestFilterContext context);
 
 	public abstract boolean hasStringLiterals();
 	

@@ -1,9 +1,5 @@
 package com.protect7.authanalyzer.filter;
 
-import burp.IBurpExtenderCallbacks;
-import burp.IRequestInfo;
-import burp.IResponseInfo;
-
 public class QueryFilter extends RequestFilter {
 
 	public QueryFilter(int filterIndex, String description) {
@@ -12,10 +8,10 @@ public class QueryFilter extends RequestFilter {
 	}
 
 	@Override
-	public boolean filterRequest(IBurpExtenderCallbacks callbacks, int toolFlag, IRequestInfo requestInfo, IResponseInfo responseInfo) {
+	public boolean filterRequest(RequestFilterContext context) {
 		if(onOffButton.isSelected()) {
-			if(requestInfo.getUrl().getQuery() != null) {
-				String query = requestInfo.getUrl().getQuery().toString().toLowerCase();
+			if(context.getQuery() != null) {
+				String query = context.getQuery().toLowerCase();
 				for(String stringLiteral : stringLiterals) {
 					if(query.contains(stringLiteral.toLowerCase()) && !stringLiteral.trim().equals("")) {
 						incrementFiltered();

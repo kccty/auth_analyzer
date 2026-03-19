@@ -6,16 +6,51 @@ import java.util.List;
 
 public class LegacyHelpersAdapter implements IExtensionHelpers {
 
+	static class SimpleHttpService implements IHttpService {
+		private final String host;
+		private final int port;
+		private final String protocol;
+		SimpleHttpService(String host, int port, String protocol) {
+			this.host = host;
+			this.port = port;
+			this.protocol = protocol;
+		}
+		@Override public String getHost() { return host; }
+		@Override public int getPort() { return port; }
+		@Override public String getProtocol() { return protocol; }
+	}
+
 	@Override
-	public IRequestInfo analyzeRequest(IHttpRequestResponse request) { throw unsupported(); }
+	public IRequestInfo analyzeRequest(IHttpRequestResponse request) {
+		return analyzeRequest(request == null ? null : request.getHttpService(), request == null ? null : request.getRequest());
+	}
 	@Override
-	public IRequestInfo analyzeRequest(IHttpService httpService, byte[] request) { throw unsupported(); }
+	public IRequestInfo analyzeRequest(IHttpService httpService, byte[] request) {
+		if (request == null) throw unsupported();
+		burp.api.montoya.http.message.requests.HttpRequest montoyaRequest;
+		if (httpService != null) {
+			montoyaRequest = burp.api.montoya.http.message.requests.HttpRequest.httpRequest(
+				burp.api.montoya.http.HttpService.httpService(httpService.getHost(), httpService.getPort(), "https".equalsIgnoreCase(httpService.getProtocol())),
+				new String(request, java.nio.charset.StandardCharsets.ISO_8859_1));
+		} else {
+			montoyaRequest = burp.api.montoya.http.message.requests.HttpRequest.httpRequest(new String(request, java.nio.charset.StandardCharsets.ISO_8859_1));
+		}
+		return MontoyaObjectFactory.requestInfo(montoyaRequest);
+	}
 	@Override
-	public IRequestInfo analyzeRequest(byte[] request) { throw unsupported(); }
+	public IRequestInfo analyzeRequest(byte[] request) { return analyzeRequest((IHttpService) null, request); }
 	@Override
-	public IResponseInfo analyzeResponse(byte[] response) { throw unsupported(); }
+	public IResponseInfo analyzeResponse(byte[] response) {
+		burp.api.montoya.http.message.responses.HttpResponse montoyaResponse = burp.api.montoya.http.message.responses.HttpResponse.httpResponse(new String(response, java.nio.charset.StandardCharsets.ISO_8859_1));
+		return MontoyaObjectFactory.responseInfo(montoyaResponse);
+	}
 	@Override
-	public IParameter getRequestParameter(byte[] request, String parameterName) { throw unsupported(); }
+	public IParameter getRequestParameter(byte[] request, String parameterName) {
+		for (IParameter parameter : analyzeRequest(request).getParameters()) {
+			if (parameter.getName().equals(parameterName)) return parameter;
+		}
+		return null;
+	}
 	@Override
 	public String urlDecode(String data) { return java.net.URLDecoder.decode(data, java.nio.charset.StandardCharsets.UTF_8); }
 	@Override
@@ -69,11 +104,20 @@ public class LegacyHelpersAdapter implements IExtensionHelpers {
 	@Override
 	public byte[] buildHttpRequest(URL url) { throw unsupported(); }
 	@Override
-	public byte[] addParameter(byte[] request, IParameter parameter) { throw unsupported(); }
+	public byte[] addParameter(byte[] request, IParameter parameter) {
+		burp.api.montoya.http.message.requests.HttpRequest req = burp.api.montoya.http.message.requests.HttpRequest.httpRequest(new String(request, java.nio.charset.StandardCharsets.ISO_8859_1));
+		return req.withAddedParameters(toMontoyaParameter(parameter)).toByteArray().getBytes();
+	}
 	@Override
-	public byte[] removeParameter(byte[] request, IParameter parameter) { throw unsupported(); }
+	public byte[] removeParameter(byte[] request, IParameter parameter) {
+		burp.api.montoya.http.message.requests.HttpRequest req = burp.api.montoya.http.message.requests.HttpRequest.httpRequest(new String(request, java.nio.charset.StandardCharsets.ISO_8859_1));
+		return req.withRemovedParameters(toMontoyaParameter(parameter)).toByteArray().getBytes();
+	}
 	@Override
-	public byte[] updateParameter(byte[] request, IParameter parameter) { throw unsupported(); }
+	public byte[] updateParameter(byte[] request, IParameter parameter) {
+		burp.api.montoya.http.message.requests.HttpRequest req = burp.api.montoya.http.message.requests.HttpRequest.httpRequest(new String(request, java.nio.charset.StandardCharsets.ISO_8859_1));
+		return req.withUpdatedParameters(toMontoyaParameter(parameter)).toByteArray().getBytes();
+	}
 	@Override
 	public byte[] toggleRequestMethod(byte[] request) { throw unsupported(); }
 	@Override
@@ -81,7 +125,7 @@ public class LegacyHelpersAdapter implements IExtensionHelpers {
 	@Override
 	public IHttpService buildHttpService(String host, int port, boolean useHttps) { return new SimpleHttpService(host, port, useHttps ? "https" : "http"); }
 	@Override
-	public IParameter buildParameter(String name, String value, byte type) { throw unsupported(); }
+	public IParameter buildParameter(String name, String value, byte type) { return MontoyaObjectFactory.parameter(name, value, type); }
 	@Override
 	public IHttpHeader buildHeader(String name, String value) { throw unsupported(); }
 	@Override
@@ -91,21 +135,14 @@ public class LegacyHelpersAdapter implements IExtensionHelpers {
 	@Override
 	public IResponseKeywords analyzeResponseKeywords(List<String> keywords, byte[]... responses) { throw unsupported(); }
 
-	private UnsupportedOperationException unsupported() {
-		return new UnsupportedOperationException("Not implemented in Montoya single-entry test mode");
+	private burp.api.montoya.http.message.params.HttpParameter toMontoyaParameter(IParameter parameter) {
+		return burp.api.montoya.http.message.params.HttpParameter.parameter(
+			parameter.getName(),
+			parameter.getValue(),
+			MontoyaObjectFactory.mapType(parameter.getType()));
 	}
 
-	private static class SimpleHttpService implements IHttpService {
-		private final String host;
-		private final int port;
-		private final String protocol;
-		SimpleHttpService(String host, int port, String protocol) {
-			this.host = host;
-			this.port = port;
-			this.protocol = protocol;
-		}
-		@Override public String getHost() { return host; }
-		@Override public int getPort() { return port; }
-		@Override public String getProtocol() { return protocol; }
+	private UnsupportedOperationException unsupported() {
+		return new UnsupportedOperationException("Not implemented in Montoya single-entry mode yet");
 	}
 }

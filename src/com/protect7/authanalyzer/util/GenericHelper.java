@@ -9,7 +9,10 @@ import java.awt.event.ActionListener;
 import javax.swing.JFrame;
 import javax.swing.JTabbedPane;
 import javax.swing.Timer;
+import java.net.URL;
+
 import com.protect7.authanalyzer.filter.RequestFilter;
+import com.protect7.authanalyzer.filter.RequestFilterContext;
 import com.protect7.authanalyzer.gui.main.ConfigurationPanel;
 import com.protect7.authanalyzer.util.Setting.Item;
 import burp.BurpExtender;
@@ -32,14 +35,10 @@ public class GenericHelper {
 			for(IHttpRequestResponse message : messages) {
 				boolean isFiltered = false;
 				if(applyFilters) {
-					IRequestInfo requestInfo = BurpExtender.callbacks.getHelpers().analyzeRequest(message);
-					IResponseInfo responseInfo = null;
-					if(message.getResponse() != null) {
-						responseInfo = BurpExtender.callbacks.getHelpers().analyzeResponse(message.getResponse());
-					}
+					RequestFilterContext context = buildFilterContext(IBurpExtenderCallbacks.TOOL_PROXY, message);
 					for(int i=0; i<CurrentConfig.getCurrentConfig().getRequestFilterList().size(); i++) {
 						RequestFilter filter = CurrentConfig.getCurrentConfig().getRequestFilterAt(i);
-						if(filter.filterRequest(BurpExtender.callbacks, IBurpExtenderCallbacks.TOOL_PROXY, requestInfo, responseInfo)) {
+						if(filter.filterRequest(context)) {
 							isFiltered = true;
 							break;
 						}
@@ -52,6 +51,22 @@ public class GenericHelper {
 		}
 	}
 	
+	private static RequestFilterContext buildFilterContext(int toolFlag, IHttpRequestResponse messageInfo) {
+		IRequestInfo requestInfo = BurpExtender.callbacks.getHelpers().analyzeRequest(messageInfo);
+		IResponseInfo responseInfo = null;
+		if(messageInfo.getResponse() != null) {
+			responseInfo = BurpExtender.callbacks.getHelpers().analyzeResponse(messageInfo.getResponse());
+		}
+		URL url = requestInfo.getUrl();
+		String urlString = url == null ? null : url.toString();
+		String path = url == null ? null : url.getPath();
+		String query = url == null ? null : url.getQuery();
+		String inferredMimeType = responseInfo == null ? null : responseInfo.getInferredMimeType();
+		Short statusCode = responseInfo == null ? null : responseInfo.getStatusCode();
+		boolean inScope = url != null && BurpExtender.callbacks.isInScope(url);
+		return new RequestFilterContext(toolFlag, urlString, path, query, requestInfo.getMethod(), inferredMimeType, statusCode, inScope);
+	}
+
 	public static void uiUpdateAnimation(Component component, Color animationColor) {
 		Color foregroundColor = component.getForeground();
 		if(component != null && foregroundColor != null && foregroundColor.getRGB() != animationColor.getRGB()) {
