@@ -264,11 +264,11 @@ public class ConfigurationPanel extends JPanel {
 				mainPanel.getCenterPanel().initCenterPanel();
 				BurpExtender.callbacks.printOutput("[AuthAnalyzer][startup-ui] after initCenterPanel tab1="
 						+ mainPanel.getCenterPanel().getTabCountDebug());
-				DataStorageProvider.restoreStoredMessages();
-				mainPanel.getCenterPanel().refreshAfterRestore();
-				BurpExtender.callbacks.printOutput("[AuthAnalyzer][startup-ui] after refreshAfterRestore tab1="
-						+ mainPanel.getCenterPanel().getTabCountDebug());
-				mainPanel.updateDividerLocation();
+				if (BurpExtender.montoyaApi == null) {
+					BurpExtender.callbacks.printOutput("[AuthAnalyzer][startup] Deferring persisted message restore until Montoya API is initialized");
+				} else {
+					finishDeferredAutoStoredDataLoad();
+				}
 			}
 		} catch (Exception e) {
 			BurpExtender.callbacks.printOutput("Can not restore saved Data. Error Message: " + e.getMessage());
@@ -280,6 +280,18 @@ public class ConfigurationPanel extends JPanel {
 		BurpExtender.callbacks.printOutput("[AuthAnalyzer][startup] loadAutoStoredData done tabCount=" + sessionTabbedPane.getTabCount()
 				+ " selectedIndex=" + sessionTabbedPane.getSelectedIndex() + " configSessions=" + config.getSessions().size()
 				+ " configSessionNames=" + getConfigSessionNames());
+	}
+
+	public void finishDeferredAutoStoredDataLoad() {
+		try {
+			DataStorageProvider.restoreStoredMessages();
+			mainPanel.getCenterPanel().refreshAfterRestore();
+			BurpExtender.callbacks.printOutput("[AuthAnalyzer][startup-ui] after refreshAfterRestore tab1="
+					+ mainPanel.getCenterPanel().getTabCountDebug());
+				mainPanel.updateDividerLocation();
+		} catch (Exception e) {
+			BurpExtender.callbacks.printOutput("Can not restore saved Data. Error Message: " + e.getMessage());
+		}
 	}
 	
 	public void saveSetup() {

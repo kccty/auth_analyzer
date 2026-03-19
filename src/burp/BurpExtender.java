@@ -23,6 +23,7 @@ public class BurpExtender implements BurpExtension, IBurpExtender, ITab, IExtens
 	private JMenu authAnalyzerMenu = null;
 	public static IBurpExtenderCallbacks callbacks;
 	public static MontoyaApi montoyaApi;
+	private static volatile boolean autoRestoreTriggered = false;
 	public static JTabbedPane burpTabbedPane = null;
 
 	@Override
@@ -30,6 +31,7 @@ public class BurpExtender implements BurpExtension, IBurpExtender, ITab, IExtens
 		BurpExtender.montoyaApi = api;
 		if (callbacks != null) {
 			callbacks.printOutput("Montoya API initialized");
+			triggerDeferredRestoreIfReady();
 		}
 	}
 
@@ -50,6 +52,7 @@ public class BurpExtender implements BurpExtension, IBurpExtender, ITab, IExtens
 		if (montoyaApi != null) {
 			callbacks.printOutput("Montoya API available for ProjectData persistence");
 		}
+		triggerDeferredRestoreIfReady();
 	}
 
 	@Override
@@ -75,6 +78,15 @@ public class BurpExtender implements BurpExtension, IBurpExtender, ITab, IExtens
 			}
 		});
 
+	}
+
+	public static synchronized void triggerDeferredRestoreIfReady() {
+		if (autoRestoreTriggered || callbacks == null || montoyaApi == null || mainPanel == null) {
+			return;
+		}
+		autoRestoreTriggered = true;
+		callbacks.printOutput("[AuthAnalyzer][startup] Both legacy and Montoya APIs are ready, running deferred restore");
+		mainPanel.getConfigurationPanel().finishDeferredAutoStoredDataLoad();
 	}
 
 	@Override
