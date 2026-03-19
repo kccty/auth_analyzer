@@ -32,7 +32,9 @@ public class LegacyCallbackStub implements IBurpExtenderCallbacks {
 	@Override
 	public void printError(String error) { api.logging().logToError(error); }
 	@Override
-	public void registerContextMenuFactory(IContextMenuFactory factory) { api.logging().logToOutput("[AuthAnalyzer][montoya-test] registerContextMenuFactory skipped in single-entry test mode"); }
+	public void registerContextMenuFactory(IContextMenuFactory factory) {
+		api.logging().logToOutput("[AuthAnalyzer][startup] registerContextMenuFactory is a no-op in Montoya single-entry mode");
+	}
 	@Override
 	public IMessageEditor createMessageEditor(IMessageEditorController controller, boolean editable) { return new LegacyMessageEditorAdapter(api, controller, editable); }
 	@Override

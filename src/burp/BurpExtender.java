@@ -32,10 +32,9 @@ public class BurpExtender implements BurpExtension, ITab {
 		mainPanel = new MainPanel();
 		api.userInterface().registerSuiteTab(getTabCaption(), getUiComponent());
 		addAuthAnalyzerMenu();
-		callbacks.printOutput(Globals.EXTENSION_NAME + " started in Montoya-only test mode");
+		callbacks.printOutput(Globals.EXTENSION_NAME + " successfully started (Montoya single-entry mode)");
 		callbacks.printOutput("Version " + Globals.VERSION);
 		callbacks.printOutput("Created by Simon Reinhart");
-		mainPanel.getConfigurationPanel().finishDeferredAutoStoredDataLoad();
 	}
 
 	@Override
