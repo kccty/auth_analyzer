@@ -31,6 +31,7 @@ public class BurpExtender implements BurpExtension, ITab {
 		callbacks.setExtensionName(Globals.EXTENSION_NAME);
 		mainPanel = new MainPanel();
 		api.userInterface().registerSuiteTab(getTabCaption(), getUiComponent());
+		api.userInterface().registerContextMenuItemsProvider(new com.protect7.authanalyzer.controller.MontoyaContextMenuController(mainPanel.getConfigurationPanel()));
 		api.http().registerHttpHandler(new com.protect7.authanalyzer.controller.MontoyaHttpListener());
 		api.extension().registerUnloadingHandler(() -> {
 			if(authAnalyzerMenu != null && authAnalyzerMenu.getParent() != null) {

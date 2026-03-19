@@ -419,9 +419,9 @@ public class CenterPanel extends JPanel {
 						JMenuItem repeatRequestItem = new JMenuItem("Repeat Request" + appendix);
 						repeatRequestItem.addActionListener(e -> {
 							Collections.sort(requestResponseList);
-							IHttpRequestResponse[] messages = new IHttpRequestResponse[requestResponseList.size()];
+							java.util.List<burp.api.montoya.http.message.HttpRequestResponse> messages = new java.util.ArrayList<>();
 							for (int i=0; i<requestResponseList.size(); i++) {
-								messages[i] = requestResponseList.get(i).getRequestResponse();
+								messages.add(requestResponseList.get(i).getRequestResponse());
 							}
 							GenericHelper.repeatRequests(messages, mainPanel.getConfigurationPanel());
 						});
@@ -626,7 +626,7 @@ public class CenterPanel extends JPanel {
 						}
 						continue;
 					}
-					IHttpRequestResponse sessionRequestResponse = analyzerRequestResponse.getRequestResponse();
+					HttpRequestResponse sessionRequestResponse = analyzerRequestResponse.getRequestResponse();
 					if (sessionRequestResponse != null) {
 						setMontoyaEditorsForMessage(tabbedPanel1, session.getName(), sessionRequestResponse, analyzerRequestResponse.getInfoText());
 						if (compareViewVisible) {
@@ -653,8 +653,7 @@ public class CenterPanel extends JPanel {
 		}
 	}
 
-	private void setMontoyaEditorsForMessage(RequestResponsePanel panel, String sessionName, IHttpRequestResponse message, String infoText) {
-		HttpRequestResponse requestResponse = toMontoyaRequestResponse(message);
+	private void setMontoyaEditorsForMessage(RequestResponsePanel panel, String sessionName, HttpRequestResponse requestResponse, String infoText) {
 		if (requestResponse == null) {
 			panel.setRequestMessage(sessionName, getMessageViewLabel(infoText), null);
 			panel.setResponseMessage(sessionName, getMessageViewLabel(infoText), null);
@@ -674,14 +673,6 @@ public class CenterPanel extends JPanel {
 	}
 
 
-	private HttpRequestResponse toMontoyaRequestResponse(IHttpRequestResponse message) {
-		if (message == null || message.getRequest() == null) {
-			return null;
-		}
-		return HttpRequestResponse.httpRequestResponse(
-				burp.api.montoya.http.message.requests.HttpRequest.httpRequest(ByteArray.byteArray(message.getRequest())),
-				message.getResponse() == null ? null : burp.api.montoya.http.message.responses.HttpResponse.httpResponse(ByteArray.byteArray(message.getResponse())));
-	}
 
 	private JLabel getMessageViewLabel(String text) {
 		String labelText = "";

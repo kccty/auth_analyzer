@@ -137,7 +137,7 @@ public class StatusPanel extends JPanel{
 				}
 				renewButton.addActionListener(e -> {
 					if(token.getRequestResponse() != null) {
-						CurrentConfig.getCurrentConfig().performAuthAnalyzerRequest(token.getRequestResponse());
+						CurrentConfig.getCurrentConfig().performAuthAnalyzerRequest(new burp.MontoyaHttpRequestResponseAdapter(token.getRequestResponse()));
 					}
 				});
 				add(renewButton, c);

@@ -48,8 +48,8 @@ public class CustomRowSorter extends TableRowSorter<RequestTableModel> {
 							for (Session session : CurrentConfig.getCurrentConfig().getSessions()) {
 								AnalyzerRequestResponse analyzerRequestResponse = session.getRequestResponseMap().get(id);
 								if(analyzerRequestResponse != null && analyzerRequestResponse.getRequestResponse() != null
-										&& analyzerRequestResponse.getRequestResponse().getRequest() != null) {
-									String response = new String(analyzerRequestResponse.getRequestResponse().getRequest());
+										&& analyzerRequestResponse.getRequestResponse().request() != null) {
+									String response = analyzerRequestResponse.getRequestResponse().request().toString();
 									boolean contained = response.contains(filterText.getText());
 									if((contained && !negativeSearch.isSelected()) || (!contained && negativeSearch.isSelected())) {
 										doShow = true;
@@ -68,8 +68,8 @@ public class CustomRowSorter extends TableRowSorter<RequestTableModel> {
 							for (Session session : CurrentConfig.getCurrentConfig().getSessions()) {
 								AnalyzerRequestResponse analyzerRequestResponse = session.getRequestResponseMap().get(id);
 								if(analyzerRequestResponse != null && analyzerRequestResponse.getRequestResponse() != null
-										&& analyzerRequestResponse.getRequestResponse().getResponse() != null) {
-									String response = new String(analyzerRequestResponse.getRequestResponse().getResponse());
+										&& analyzerRequestResponse.getRequestResponse().response() != null) {
+									String response = analyzerRequestResponse.getRequestResponse().response().toString();
 									boolean contained = response.contains(filterText.getText());
 									if((contained && !negativeSearch.isSelected()) || (!contained && negativeSearch.isSelected())) {
 										doShow = true;

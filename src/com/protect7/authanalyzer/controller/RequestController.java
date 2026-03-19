@@ -74,7 +74,7 @@ public class RequestController {
 						if(success) {
 							session.getStatusPanel().updateTokenStatus(token);
 							if(token.getRequestResponse() == null || token.getPriority() <= tokenPriority.getPriority()) {
-								token.setRequestResponse(new burp.MontoyaHttpRequestResponseAdapter(sessionRequestResponse));
+								token.setRequestResponse(sessionRequestResponse);
 								token.setPriority(tokenPriority.getPriority());
 							}
 						}
@@ -82,7 +82,7 @@ public class RequestController {
 					BypassConstants bypassConstant = originalResponse == null ? BypassConstants.NA
 							: analyzeResponse(originalResponse, sessionResponse);
 					AnalyzerRequestResponse analyzerRequestResponse = new AnalyzerRequestResponse(
-							new burp.MontoyaHttpRequestResponseAdapter(sessionRequestResponse), bypassConstant, null,
+							sessionRequestResponse, bypassConstant, null,
 							sessionResponse.statusCode(), sessionResponse.body().length());
 					session.putRequestResponse(mapId, analyzerRequestResponse);
 					DataStorageProvider.saveSessionRequestResponse(session.getName(), mapId, analyzerRequestResponse);
@@ -103,7 +103,7 @@ public class RequestController {
 		int originalStatusCode = originalResponse == null ? -1 : originalResponse.statusCode();
 		int originalResponseContentLength = originalResponse == null ? -1 : originalResponse.body().length();
 		OriginalRequestResponse requestResponse = new OriginalRequestResponse(mapId,
-				new burp.MontoyaHttpRequestResponseAdapter(burp.api.montoya.http.message.HttpRequestResponse.httpRequestResponse(originalRequest, originalResponse)),
+				burp.api.montoya.http.message.HttpRequestResponse.httpRequestResponse(originalRequest, originalResponse),
 				originalRequest.method(), url, infoText, originalStatusCode, originalResponseContentLength);
 		CurrentConfig.getCurrentConfig().getTableModel().addNewRequestResponse(requestResponse);
 		DataStorageProvider.saveOriginalRequestResponse(requestResponse);
@@ -166,7 +166,11 @@ public class RequestController {
 					// Perform modified request
 					IHttpRequestResponse sessionRequestResponse = BurpExtender.callbacks
 							.makeHttpRequest(originalRequestResponse.getHttpService(), message);
-				
+					burp.api.montoya.http.message.responses.HttpResponse sessionResponse = sessionRequestResponse.getResponse() == null ? null : burp.api.montoya.http.message.responses.HttpResponse.httpResponse(burp.api.montoya.core.ByteArray.byteArray(sessionRequestResponse.getResponse()));
+					burp.api.montoya.http.message.HttpRequestResponse montoyaSessionRequestResponse = burp.api.montoya.http.message.HttpRequestResponse.httpRequestResponse(
+							burp.api.montoya.http.message.requests.HttpRequest.httpRequest(burp.api.montoya.http.HttpService.httpService(sessionRequestResponse.getHttpService().getHost(), sessionRequestResponse.getHttpService().getPort(), "https".equalsIgnoreCase(sessionRequestResponse.getHttpService().getProtocol())), burp.api.montoya.core.ByteArray.byteArray(message)),
+							sessionResponse);
+					
 					// Analyze Response of modified Request
 					if (sessionRequestResponse.getRequest() != null && sessionRequestResponse.getResponse() != null) {
 						IResponseInfo sessionResponseInfo = BurpExtender.callbacks.getHelpers()
@@ -175,16 +179,16 @@ public class RequestController {
 						for (Token token : session.getTokens()) {
 							boolean success = false;
 							if (token.isAutoExtract()) {
-								success = ExtractionHelper.extractCurrentTokenValue(sessionRequestResponse.getResponse(), sessionResponseInfo, token);
+								success = ExtractionHelper.extractCurrentTokenValue(sessionResponse, token);
 							}
 							if (token.isFromToString()) {
-								success = ExtractionHelper.extractTokenWithFromToString(sessionRequestResponse.getResponse(), sessionResponseInfo, token);
+								success = ExtractionHelper.extractTokenWithFromToString(sessionResponse, token);
 							}
 							if(success) {
 								session.getStatusPanel().updateTokenStatus(token);
 								// Token value successfully extracted. Set TokenRequestResponse for renew feature.
 								if(token.getRequestResponse() == null || token.getPriority() <= tokenPriority.getPriority()) {
-									token.setRequestResponse(new burp.MontoyaHttpRequestResponseAdapter(sessionRequestResponse));
+									token.setRequestResponse(montoyaSessionRequestResponse);
 									token.setPriority(tokenPriority.getPriority());
 								}
 							}
@@ -193,14 +197,14 @@ public class RequestController {
 							BypassConstants bypassConstant = analyzeResponse(originalRequestResponse.getResponse(),
 									sessionRequestResponse.getResponse(), originalResponseInfo, sessionResponseInfo);
 							AnalyzerRequestResponse analyzerRequestResponse = new AnalyzerRequestResponse(
-									new burp.MontoyaHttpRequestResponseAdapter(sessionRequestResponse), bypassConstant, null, sessionResponseInfo.getStatusCode(),
+									montoyaSessionRequestResponse, bypassConstant, null, sessionResponseInfo.getStatusCode(),
 									sessionRequestResponse.getResponse().length - sessionResponseInfo.getBodyOffset());
 							session.putRequestResponse(mapId, analyzerRequestResponse);
 							DataStorageProvider.saveSessionRequestResponse(session.getName(), mapId, analyzerRequestResponse);
 						}
 						else {
 							AnalyzerRequestResponse analyzerRequestResponse = new AnalyzerRequestResponse(
-									new burp.MontoyaHttpRequestResponseAdapter(sessionRequestResponse), BypassConstants.NA, null, sessionResponseInfo.getStatusCode(),
+									montoyaSessionRequestResponse, BypassConstants.NA, null, sessionResponseInfo.getStatusCode(),
 									sessionRequestResponse.getResponse().length - sessionResponseInfo.getBodyOffset());
 							session.putRequestResponse(mapId, analyzerRequestResponse);
 							DataStorageProvider.saveSessionRequestResponse(session.getName(), mapId, analyzerRequestResponse);
@@ -231,7 +235,9 @@ public class RequestController {
 				originalStatusCode = originalResponseInfo.getStatusCode();
 				originalResponseContentLength = originalRequestResponse.getResponse().length - originalResponseInfo.getBodyOffset();
 			}
-			OriginalRequestResponse requestResponse = new OriginalRequestResponse(mapId, originalRequestResponse, 
+			OriginalRequestResponse requestResponse = new OriginalRequestResponse(mapId, burp.api.montoya.http.message.HttpRequestResponse.httpRequestResponse(
+					burp.api.montoya.http.message.requests.HttpRequest.httpRequest(burp.api.montoya.http.HttpService.httpService(originalRequestResponse.getHttpService().getHost(), originalRequestResponse.getHttpService().getPort(), "https".equalsIgnoreCase(originalRequestResponse.getHttpService().getProtocol())), burp.api.montoya.core.ByteArray.byteArray(originalRequestResponse.getRequest())),
+					originalRequestResponse.getResponse() == null ? null : burp.api.montoya.http.message.responses.HttpResponse.httpResponse(burp.api.montoya.core.ByteArray.byteArray(originalRequestResponse.getResponse()))), 
 					originalRequestInfo.getMethod(), url, infoText, originalStatusCode, originalResponseContentLength);
 			CurrentConfig.getCurrentConfig().getTableModel().addNewRequestResponse(requestResponse);		
 			DataStorageProvider.saveOriginalRequestResponse(requestResponse);

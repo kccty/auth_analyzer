@@ -19,8 +19,8 @@ import com.protect7.authanalyzer.storage.StoredHttpMessage;
 import com.protect7.authanalyzer.storage.StoredOriginalRequestResponse;
 
 import burp.BurpExtender;
-import burp.IHttpRequestResponse;
-import burp.IHttpService;
+import burp.api.montoya.http.HttpService;
+import burp.api.montoya.http.message.HttpRequestResponse;
 import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.persistence.PersistedObject;
 
@@ -67,7 +67,7 @@ public class DataStorageProvider {
 		return value;
 	}
 
-	public static void saveMessage(int id, String session, IHttpRequestResponse message) {
+	public static void saveMessage(int id, String session, HttpRequestResponse message) {
 		if (session == null) {
 			saveOriginalRequestResponse(new StoredOriginalRequestResponse(id, toStoredHttpMessage(message), null, null, null, "", -1, -1, false));
 		} else {
@@ -75,7 +75,7 @@ public class DataStorageProvider {
 		}
 	}
 
-	public IHttpRequestResponse loadMessage(int id, String session) {
+	public HttpRequestResponse loadMessage(int id, String session) {
 		if (session == null) {
 			StoredOriginalRequestResponse stored = loadStoredOriginal(id);
 			return stored == null ? null : toHttpRequestResponse(stored.getMessage());
@@ -190,7 +190,7 @@ public class DataStorageProvider {
 			if (stored == null || stored.getMessage() == null) {
 				continue;
 			}
-			IHttpRequestResponse message = toHttpRequestResponse(stored.getMessage());
+			HttpRequestResponse message = toHttpRequestResponse(stored.getMessage());
 			OriginalRequestResponse restored = new OriginalRequestResponse(stored.getId(), message, stored.getMethod(),
 					stored.getUrl(), stored.getInfoText(), stored.getStatusCode(), stored.getResponseContentLength());
 			restored.restoreViewState(stored.getComment(), stored.isMarked());
@@ -390,26 +390,26 @@ public class DataStorageProvider {
 		}
 	}
 
-	private static StoredHttpMessage toStoredHttpMessage(IHttpRequestResponse message) {
-		if (message == null || message.getRequest() == null) {
+	private static StoredHttpMessage toStoredHttpMessage(HttpRequestResponse message) {
+		if (message == null || message.request() == null) {
 			return null;
 		}
-		if (message.getHttpService() == null) {
+		if (message.httpService() == null) {
 			return null;
 		}
-		IHttpService service = message.getHttpService();
-		return new StoredHttpMessage(service.getHost(), service.getPort(), "https".equalsIgnoreCase(service.getProtocol()),
-				message.getRequest(), message.getResponse());
+		HttpService service = message.httpService();
+		return new StoredHttpMessage(service.host(), service.port(), service.secure(),
+				message.request().toByteArray().getBytes(), message.response() == null ? null : message.response().toByteArray().getBytes());
 	}
 
-	private static IHttpRequestResponse toHttpRequestResponse(StoredHttpMessage stored) {
+	private static HttpRequestResponse toHttpRequestResponse(StoredHttpMessage stored) {
 		if (stored == null) {
 			return null;
 		}
 		burp.api.montoya.http.HttpService service = burp.api.montoya.http.HttpService.httpService(stored.getHost(), stored.getPort(), stored.isHttps());
 		burp.api.montoya.http.message.requests.HttpRequest request = burp.api.montoya.http.message.requests.HttpRequest.httpRequest(service, ByteArray.byteArray(stored.getRequest()));
 		burp.api.montoya.http.message.responses.HttpResponse response = stored.getResponse() == null ? null : burp.api.montoya.http.message.responses.HttpResponse.httpResponse(ByteArray.byteArray(stored.getResponse()));
-		return new burp.MontoyaHttpRequestResponseAdapter(burp.api.montoya.http.message.HttpRequestResponse.httpRequestResponse(request, response));
+		return burp.api.montoya.http.message.HttpRequestResponse.httpRequestResponse(request, response);
 	}
 
 	private static String sanitizePathSegment(String value) {

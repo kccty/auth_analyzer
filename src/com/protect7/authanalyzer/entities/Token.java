@@ -8,7 +8,7 @@ import java.util.EnumSet;
 
 import com.protect7.authanalyzer.util.Globals;
 
-import burp.IHttpRequestResponse;
+import burp.api.montoya.http.message.HttpRequestResponse;
 
 public class Token {
 	
@@ -22,7 +22,7 @@ public class Token {
 	private final boolean staticValue;
 	private final boolean fromToString;
 	private final boolean promptForInput;
-	private IHttpRequestResponse requestResponse = null;
+	private HttpRequestResponse requestResponse = null;
 	private int priority = 0;
 	private final EnumSet<TokenLocation> tokenLocationSet; 
 	private final EnumSet<AutoExtractLocation> autoExtractLocationSet;
@@ -168,11 +168,11 @@ public class Token {
 		return addIfNotExists;
 	}
 
-	public IHttpRequestResponse getRequestResponse() {
+	public HttpRequestResponse getRequestResponse() {
 		return requestResponse;
 	}
 
-	public void setRequestResponse(IHttpRequestResponse requestResponse) {
+	public void setRequestResponse(HttpRequestResponse requestResponse) {
 		this.requestResponse = requestResponse;
 	}
 

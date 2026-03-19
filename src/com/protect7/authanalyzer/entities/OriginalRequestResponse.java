@@ -1,11 +1,11 @@
 package com.protect7.authanalyzer.entities;
 
-import burp.IHttpRequestResponse;
+import burp.api.montoya.http.message.HttpRequestResponse;
 
 public class OriginalRequestResponse implements Comparable<OriginalRequestResponse>{
 	
 	private final int id;
-	private final IHttpRequestResponse requestResponse;
+	private final HttpRequestResponse requestResponse;
 	private final String method;
 	private final String host;
 	private final String url;
@@ -15,12 +15,12 @@ public class OriginalRequestResponse implements Comparable<OriginalRequestRespon
 	private final int responseContentLength;
 	private boolean marked = false;
 	
-	public OriginalRequestResponse(int id, IHttpRequestResponse requestResponse, String method,
+	public OriginalRequestResponse(int id, HttpRequestResponse requestResponse, String method,
 			String url, String infoText, int statusCode, int responseContentLength) {
 		this.id = id;
 		this.requestResponse = requestResponse;
 		this.method = method;
-		this.host = requestResponse.getHttpService().getHost();
+		this.host = requestResponse.httpService().host();
 		this.url = url;
 		this.infoText = infoText;
 		this.statusCode = statusCode;
@@ -32,7 +32,7 @@ public class OriginalRequestResponse implements Comparable<OriginalRequestRespon
 	public int getId() {
 		return id;
 	}
-	public IHttpRequestResponse getRequestResponse() {
+	public HttpRequestResponse getRequestResponse() {
 		return requestResponse;
 	}
 	public String getMethod() {

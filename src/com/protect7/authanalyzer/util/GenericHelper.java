@@ -9,7 +9,6 @@ import java.awt.event.ActionListener;
 import javax.swing.JFrame;
 import javax.swing.JTabbedPane;
 import javax.swing.Timer;
-import java.net.URL;
 
 import com.protect7.authanalyzer.filter.RequestFilter;
 import com.protect7.authanalyzer.filter.RequestFilterContext;
@@ -17,13 +16,12 @@ import com.protect7.authanalyzer.gui.main.ConfigurationPanel;
 import com.protect7.authanalyzer.util.Setting.Item;
 import burp.BurpExtender;
 import burp.IBurpExtenderCallbacks;
-import burp.IHttpRequestResponse;
-import burp.IRequestInfo;
-import burp.IResponseInfo;
+import burp.api.montoya.http.message.HttpRequestResponse;
+import burp.api.montoya.http.message.responses.HttpResponse;
 
 public class GenericHelper {
 	
-	public static void repeatRequests(IHttpRequestResponse[] messages, ConfigurationPanel configurationPanel) {
+	public static void repeatRequests(java.util.List<HttpRequestResponse> messages, ConfigurationPanel configurationPanel) {
 		if(configurationPanel.isPaused()) {
 			configurationPanel.pauseButtonPressed();
 		}
@@ -32,7 +30,7 @@ public class GenericHelper {
 		}
 		if(CurrentConfig.getCurrentConfig().isRunning()) {
 			boolean applyFilters = Setting.getValueAsBoolean(Item.APPLY_FILTER_ON_MANUAL_REPEAT);
-			for(IHttpRequestResponse message : messages) {
+			for(HttpRequestResponse message : messages) {
 				boolean isFiltered = false;
 				if(applyFilters) {
 					RequestFilterContext context = buildFilterContext(IBurpExtenderCallbacks.TOOL_PROXY, message);
@@ -45,26 +43,30 @@ public class GenericHelper {
 					}
 				}
 				if(!isFiltered) {
-					CurrentConfig.getCurrentConfig().performAuthAnalyzerRequest(message);
+					CurrentConfig.getCurrentConfig().performAuthAnalyzerRequest(new burp.MontoyaHttpRequestResponseAdapter(message));
 				}
 			}
 		}
 	}
 	
-	private static RequestFilterContext buildFilterContext(int toolFlag, IHttpRequestResponse messageInfo) {
-		IRequestInfo requestInfo = BurpExtender.callbacks.getHelpers().analyzeRequest(messageInfo);
-		IResponseInfo responseInfo = null;
-		if(messageInfo.getResponse() != null) {
-			responseInfo = BurpExtender.callbacks.getHelpers().analyzeResponse(messageInfo.getResponse());
+	private static RequestFilterContext buildFilterContext(int toolFlag, HttpRequestResponse messageInfo) {
+		burp.api.montoya.http.message.requests.HttpRequest request = messageInfo.request();
+		burp.api.montoya.http.message.responses.HttpResponse response = messageInfo.response();
+		String urlString = request == null ? null : request.url();
+		String path = request == null ? null : request.pathWithoutQuery();
+		String query = request == null ? null : request.query();
+		String method = request == null ? null : request.method();
+		String inferredMimeType = response == null || response.inferredMimeType() == null ? null : String.valueOf(response.inferredMimeType());
+		Short statusCode = response == null ? null : (short) response.statusCode();
+		boolean inScope = false;
+		if (urlString != null) {
+			try {
+				inScope = BurpExtender.callbacks.isInScope(java.net.URI.create(urlString).toURL());
+			} catch (Exception ignored) {
+				inScope = false;
+			}
 		}
-		URL url = requestInfo.getUrl();
-		String urlString = url == null ? null : url.toString();
-		String path = url == null ? null : url.getPath();
-		String query = url == null ? null : url.getQuery();
-		String inferredMimeType = responseInfo == null ? null : responseInfo.getInferredMimeType();
-		Short statusCode = responseInfo == null ? null : responseInfo.getStatusCode();
-		boolean inScope = url != null && BurpExtender.callbacks.isInScope(url);
-		return new RequestFilterContext(toolFlag, urlString, path, query, requestInfo.getMethod(), inferredMimeType, statusCode, inScope);
+		return new RequestFilterContext(toolFlag, urlString, path, query, method, inferredMimeType, statusCode, inScope);
 	}
 
 	public static void uiUpdateAnimation(Component component, Color animationColor) {

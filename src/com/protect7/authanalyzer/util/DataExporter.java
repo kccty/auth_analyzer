@@ -10,9 +10,10 @@ import com.protect7.authanalyzer.entities.AnalyzerRequestResponse;
 import com.protect7.authanalyzer.entities.OriginalRequestResponse;
 import com.protect7.authanalyzer.entities.Session;
 import burp.BurpExtender;
-import burp.IHttpRequestResponse;
 import burp.IRequestInfo;
 import burp.IResponseInfo;
+import burp.MontoyaHttpRequestResponseAdapter;
+import burp.api.montoya.http.message.HttpRequestResponse;
 
 public class DataExporter {
 
@@ -32,7 +33,8 @@ public class DataExporter {
 			// Write Body
 			for (OriginalRequestResponse requestResponse : originalRequestResponseList) {
 				writer.write("<Message>");
-				IHttpRequestResponse originalRequestResponse = requestResponse.getRequestResponse();
+				HttpRequestResponse originalMontoyaRequestResponse = requestResponse.getRequestResponse();
+				MontoyaHttpRequestResponseAdapter originalRequestResponse = new MontoyaHttpRequestResponseAdapter(originalMontoyaRequestResponse);
 				StringBuffer row = new StringBuffer();
 				IRequestInfo originalRequestInfo = BurpExtender.callbacks.getHelpers()
 						.analyzeRequest(originalRequestResponse);
@@ -62,13 +64,15 @@ public class DataExporter {
 					for (SessionColumn column : sessionColumns) {
 						String data;
 						if ((column == SessionColumn.REQUEST || column == SessionColumn.RESPONSE) && doBase64Encode) {
+							MontoyaHttpRequestResponseAdapter sessionRr = sessionRequestResponse.getRequestResponse() == null ? null : new MontoyaHttpRequestResponseAdapter(sessionRequestResponse.getRequestResponse());
 							data = Base64.getEncoder()
 									.encodeToString(setIntoCDATA(getCellValue(column, requestResponse.getId(),
-											sessionRequestResponse.getRequestResponse(),
+											sessionRr,
 											sessionRequestResponse.getStatus())).getBytes());
 						} else {
+							MontoyaHttpRequestResponseAdapter sessionRr = sessionRequestResponse.getRequestResponse() == null ? null : new MontoyaHttpRequestResponseAdapter(sessionRequestResponse.getRequestResponse());
 							data = setIntoCDATA(getCellValue(column, requestResponse.getId(),
-									sessionRequestResponse.getRequestResponse(), sessionRequestResponse.getStatus()));
+									sessionRr, sessionRequestResponse.getStatus()));
 						}
 						row.append("<" + session.getName().replace(" ", "_") + "_" + column.getName().replace(" ", "_")
 								+ ">" + data + "</" + session.getName().replace(" ", "_") + "_"
@@ -119,7 +123,8 @@ public class DataExporter {
 			// Write Body
 			for (OriginalRequestResponse requestResponse : originalRequestResponseList) {
 				writer.write("<tr>");
-				IHttpRequestResponse originalRequestResponse = requestResponse.getRequestResponse();
+				HttpRequestResponse originalMontoyaRequestResponse = requestResponse.getRequestResponse();
+				MontoyaHttpRequestResponseAdapter originalRequestResponse = originalMontoyaRequestResponse == null ? null : new MontoyaHttpRequestResponseAdapter(originalMontoyaRequestResponse);
 				StringBuffer row = new StringBuffer();
 				IRequestInfo originalRequestInfo = null;
 				if(originalRequestResponse != null) {
@@ -141,8 +146,9 @@ public class DataExporter {
 							.get(requestResponse.getId());
 					for (SessionColumn column : sessionColumns) {
 						String startTag = "<td><div class='message'>" ;
+						MontoyaHttpRequestResponseAdapter sessionRr = sessionRequestResponse.getRequestResponse() == null ? null : new MontoyaHttpRequestResponseAdapter(sessionRequestResponse.getRequestResponse());
 						String cellValue = getCellValue(column, requestResponse.getId(),
-								sessionRequestResponse.getRequestResponse(),
+								sessionRr,
 								sessionRequestResponse.getStatus());
 						String endTag = "</div></td>";
 						if(column == SessionColumn.BYPASS_STATUS) {
@@ -181,7 +187,7 @@ public class DataExporter {
 	}
 
 	private String getCellValue(MainColumn column, Integer id, IRequestInfo requestInfo,
-			IHttpRequestResponse requestResponse, String comment) {
+			MontoyaHttpRequestResponseAdapter requestResponse, String comment) {
 		switch (column) {
 		case ID:
 			return String.valueOf(id);
@@ -203,7 +209,7 @@ public class DataExporter {
 	}
 
 	private String getCellValue(SessionColumn column, Integer id,
-			IHttpRequestResponse requestResponse, BypassConstants bypassStatus) {
+			MontoyaHttpRequestResponseAdapter requestResponse, BypassConstants bypassStatus) {
 		IResponseInfo responseInfo = null;
 		if(requestResponse != null && requestResponse.getResponse() != null) {
 			responseInfo = BurpExtender.callbacks.getHelpers()
