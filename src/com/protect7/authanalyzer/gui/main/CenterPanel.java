@@ -465,13 +465,28 @@ public class CenterPanel extends JPanel {
 
 	// Paint center panel according to session list
 	public void initCenterPanel() {
-		initTableWithModel();
+		boolean hadTableModel = tableModel != null;
+		int previouslySelectedId = selectedId;
+		if (!hadTableModel) {
+			initTableWithModel();
+		}
 		tabbedPanel1.init();
 		tabbedPanel2.init();
 		selectedId = -1;
 		diffPane.setText(TEXT_DIFF_VIEW_DEFAULT);
 		splitPane.setResizeWeight(0.5d);
 		refreshTableFilter();
+		if (hadTableModel && previouslySelectedId != -1) {
+			for (int row = 0; row < table.getRowCount(); row++) {
+				int modelRow = table.convertRowIndexToModel(row);
+				OriginalRequestResponse requestResponse = tableModel.getOriginalRequestResponse(modelRow);
+				if (requestResponse != null && requestResponse.getId() == previouslySelectedId) {
+					table.setRowSelectionInterval(row, row);
+					changeRequestResponseView(true);
+					break;
+				}
+			}
+		}
 	}
 
 	public void refreshAfterRestore() {

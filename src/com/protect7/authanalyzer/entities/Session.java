@@ -9,7 +9,8 @@ import java.net.URL;
  */
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import com.google.gson.ExclusionStrategy;
 import com.google.gson.FieldAttributes;
 import com.protect7.authanalyzer.gui.entity.StatusPanel;
@@ -26,7 +27,7 @@ public class Session {
 	private URL scopeUrl;
 	private int tabbedPaneRequestIndex;
 	private int tabbedPaneResponseIndex;
-	private final HashMap<Integer, AnalyzerRequestResponse> requestResponseMap = new HashMap<>();
+	private final ConcurrentHashMap<Integer, AnalyzerRequestResponse> requestResponseMap = new ConcurrentHashMap<>();
 	private ArrayList<Token> tokens = new ArrayList<Token>();
 	private ArrayList<MatchAndReplace> matchAndReplaceList = new ArrayList<MatchAndReplace>();
 	private final StatusPanel statusPanel;
@@ -58,7 +59,7 @@ public class Session {
 		this.headersToReplace = headersToReplace;
 	}
 
-	public HashMap<Integer, AnalyzerRequestResponse> getRequestResponseMap() {
+	public Map<Integer, AnalyzerRequestResponse> getRequestResponseMap() {
 		return requestResponseMap;
 	}
 

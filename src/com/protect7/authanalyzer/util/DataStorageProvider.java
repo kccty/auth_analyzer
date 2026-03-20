@@ -32,6 +32,7 @@ public class DataStorageProvider {
 	private static final String ORIGINALS_KEY = "originals";
 	private static final String SESSIONS_KEY = "sessions";
 	private static final Gson GSON = new GsonBuilder().create();
+	private static final Object STORAGE_LOCK = new Object();
 
 	public static String getSetupAsJsonString() {
 		JsonArray sessionArray = new JsonArray();
@@ -117,195 +118,207 @@ public class DataStorageProvider {
 	}
 	
 	public static void saveAllStoredMessages() {
-		CurrentConfig config = CurrentConfig.getCurrentConfig();
-		StoredIndex snapshot = new StoredIndex();
-		PersistedObject root = rootStorage();
-		PersistedObject originals = ensureChild(root, ORIGINALS_KEY);
-		PersistedObject sessions = ensureChild(root, SESSIONS_KEY);
-		clearChildObject(originals);
-		clearChildObject(sessions);
-		BurpExtender.callbacks.printOutput("[AuthAnalyzer][save-all] start originals="
-				+ config.getTableModel().getOriginalRequestResponseList().size() + " sessions=" + config.getSessions().size());
-		for (OriginalRequestResponse requestResponse : config.getTableModel().getOriginalRequestResponseList()) {
-			if (requestResponse == null) {
-				continue;
-			}
-			StoredOriginalRequestResponse stored = new StoredOriginalRequestResponse(requestResponse.getId(),
-					toStoredHttpMessage(requestResponse.getRequestResponse()), requestResponse.getMethod(), requestResponse.getUrl(),
-					requestResponse.getInfoText(), requestResponse.getComment(), requestResponse.getStatusCode(),
-					requestResponse.getResponseContentLength(), requestResponse.isMarked());
-			storeJsonObject(originals, String.valueOf(stored.getId()), GSON.toJson(stored));
-			if (!snapshot.originalIds.contains(stored.getId())) {
-				snapshot.originalIds.add(stored.getId());
-			}
-		}
-		Collections.sort(snapshot.originalIds);
-		for (Session session : config.getSessions()) {
-			ArrayList<Integer> ids = snapshot.sessions.computeIfAbsent(session.getName(), k -> new ArrayList<Integer>());
-			PersistedObject sessionObject = ensureChild(sessions, sanitizePathSegment(session.getName()));
-			for (Map.Entry<Integer, AnalyzerRequestResponse> entry : session.getRequestResponseMap().entrySet()) {
-				if (entry.getValue() == null) {
+		synchronized (STORAGE_LOCK) {
+			CurrentConfig config = CurrentConfig.getCurrentConfig();
+			StoredIndex snapshot = new StoredIndex();
+			PersistedObject root = rootStorage();
+			PersistedObject originals = ensureChild(root, ORIGINALS_KEY);
+			PersistedObject sessions = ensureChild(root, SESSIONS_KEY);
+			clearChildObject(originals);
+			clearChildObject(sessions);
+			BurpExtender.callbacks.printOutput("[AuthAnalyzer][save-all] start originals="
+					+ config.getTableModel().getOriginalRequestResponseList().size() + " sessions=" + config.getSessions().size());
+			for (OriginalRequestResponse requestResponse : config.getTableModel().getOriginalRequestResponseList()) {
+				if (requestResponse == null) {
 					continue;
 				}
-				if (!snapshot.originalIds.contains(entry.getKey())) {
-					BurpExtender.callbacks.printOutput("[AuthAnalyzer][save-all] skip orphan session entry session="
-							+ session.getName() + " id=" + entry.getKey());
-					continue;
-				}
-				StoredAnalyzerRequestResponse stored = new StoredAnalyzerRequestResponse(
-						toStoredHttpMessage(entry.getValue().getRequestResponse()),
-						entry.getValue().getStatus() == null ? null : entry.getValue().getStatus().name(),
-						entry.getValue().getInfoText(), entry.getValue().getStatusCode(),
-						entry.getValue().getResponseContentLength());
-				storeJsonObject(sessionObject, String.valueOf(entry.getKey()), GSON.toJson(stored));
-				if (!ids.contains(entry.getKey())) {
-					ids.add(entry.getKey());
+				StoredOriginalRequestResponse stored = new StoredOriginalRequestResponse(requestResponse.getId(),
+						toStoredHttpMessage(requestResponse.getRequestResponse()), requestResponse.getMethod(), requestResponse.getUrl(),
+						requestResponse.getInfoText(), requestResponse.getComment(), requestResponse.getStatusCode(),
+						requestResponse.getResponseContentLength(), requestResponse.isMarked());
+				storeJsonObject(originals, String.valueOf(stored.getId()), GSON.toJson(stored));
+				if (!snapshot.originalIds.contains(stored.getId())) {
+					snapshot.originalIds.add(stored.getId());
 				}
 			}
-			Collections.sort(ids);
+			Collections.sort(snapshot.originalIds);
+			for (Session session : config.getSessions()) {
+				ArrayList<Integer> ids = snapshot.sessions.computeIfAbsent(session.getName(), k -> new ArrayList<Integer>());
+				PersistedObject sessionObject = ensureChild(sessions, sanitizePathSegment(session.getName()));
+				for (Map.Entry<Integer, AnalyzerRequestResponse> entry : session.getRequestResponseMap().entrySet()) {
+					if (entry.getValue() == null) {
+						continue;
+					}
+					if (!snapshot.originalIds.contains(entry.getKey())) {
+						BurpExtender.callbacks.printOutput("[AuthAnalyzer][save-all] skip orphan session entry session="
+								+ session.getName() + " id=" + entry.getKey());
+						continue;
+					}
+					StoredAnalyzerRequestResponse stored = new StoredAnalyzerRequestResponse(
+							toStoredHttpMessage(entry.getValue().getRequestResponse()),
+							entry.getValue().getStatus() == null ? null : entry.getValue().getStatus().name(),
+							entry.getValue().getInfoText(), entry.getValue().getStatusCode(),
+							entry.getValue().getResponseContentLength());
+					storeJsonObject(sessionObject, String.valueOf(entry.getKey()), GSON.toJson(stored));
+					if (!ids.contains(entry.getKey())) {
+						ids.add(entry.getKey());
+					}
+				}
+				Collections.sort(ids);
+			}
+			saveIndex(snapshot);
+			BurpExtender.callbacks.printOutput("[AuthAnalyzer][save-all] done originalIds=" + snapshot.originalIds
+					+ " sessionNames=" + snapshot.sessions.keySet());
 		}
-		saveIndex(snapshot);
-		BurpExtender.callbacks.printOutput("[AuthAnalyzer][save-all] done originalIds=" + snapshot.originalIds
-				+ " sessionNames=" + snapshot.sessions.keySet());
 	}
 
 	public static void restoreStoredMessages() {
-		StoredIndex index = loadIndex();
-		if (index == null) {
-			BurpExtender.callbacks.printOutput("[AuthAnalyzer][restore] index is null, nothing to restore");
-			return;
-		}
-		CurrentConfig config = CurrentConfig.getCurrentConfig();
-		ArrayList<Integer> originalIds = new ArrayList<Integer>(index.originalIds);
-		Collections.sort(originalIds);
-		int maxId = config.getMapId();
-		BurpExtender.callbacks.printOutput(String.format(
-				"[AuthAnalyzer][restore] start originalIds=%d sessionNames=%s currentMapId=%d",
-				originalIds.size(), index.sessions.keySet(), config.getMapId()));
-		for (Integer id : originalIds) {
-			StoredOriginalRequestResponse stored = loadStoredOriginal(id);
+		synchronized (STORAGE_LOCK) {
+			StoredIndex index = loadIndex();
+			if (index == null) {
+				BurpExtender.callbacks.printOutput("[AuthAnalyzer][restore] index is null, nothing to restore");
+				return;
+			}
+			CurrentConfig config = CurrentConfig.getCurrentConfig();
+			ArrayList<Integer> originalIds = new ArrayList<Integer>(index.originalIds);
+			Collections.sort(originalIds);
+			int maxId = config.getMapId();
 			BurpExtender.callbacks.printOutput(String.format(
-					"[AuthAnalyzer][restore-original] id=%d stored=%s message=%s",
-					id, stored == null ? "null" : "ok", (stored == null || stored.getMessage() == null) ? "null" : "ok"));
-			if (stored == null || stored.getMessage() == null) {
-				continue;
-			}
-			HttpRequestResponse message = toHttpRequestResponse(stored.getMessage());
-			OriginalRequestResponse restored = new OriginalRequestResponse(stored.getId(), message, stored.getMethod(),
-					stored.getUrl(), stored.getInfoText(), stored.getStatusCode(), stored.getResponseContentLength());
-			restored.restoreViewState(stored.getComment(), stored.isMarked());
-			config.getTableModel().addNewRequestResponse(restored);
-			if (stored.getId() > maxId) {
-				maxId = stored.getId();
-			}
-		}
-		for (Map.Entry<String, ArrayList<Integer>> entry : index.sessions.entrySet()) {
-			Session session = config.getSessionByName(entry.getKey());
-			if (session == null) {
-				BurpExtender.callbacks.printOutput("[AuthAnalyzer][restore-session] session not found: " + entry.getKey());
-				continue;
-			}
-			for (Integer id : entry.getValue()) {
-				if (!originalIds.contains(id)) {
-					BurpExtender.callbacks.printOutput("[AuthAnalyzer][restore-session] skip orphan session entry session="
-							+ entry.getKey() + " id=" + id + " because original id is not present in index.originalIds");
-					continue;
-				}
-				StoredAnalyzerRequestResponse stored = loadStoredSession(entry.getKey(), id);
+					"[AuthAnalyzer][restore] start originalIds=%d sessionNames=%s currentMapId=%d",
+					originalIds.size(), index.sessions.keySet(), config.getMapId()));
+			for (Integer id : originalIds) {
+				StoredOriginalRequestResponse stored = loadStoredOriginal(id);
 				BurpExtender.callbacks.printOutput(String.format(
-						"[AuthAnalyzer][restore-session] session=%s id=%d stored=%s message=%s",
-						entry.getKey(), id, stored == null ? "null" : "ok", (stored == null || stored.getMessage() == null) ? "null" : "ok"));
-				if (stored == null) {
+						"[AuthAnalyzer][restore-original] id=%d stored=%s message=%s",
+						id, stored == null ? "null" : "ok", (stored == null || stored.getMessage() == null) ? "null" : "ok"));
+				if (stored == null || stored.getMessage() == null) {
 					continue;
 				}
-				AnalyzerRequestResponse restored = new AnalyzerRequestResponse(toHttpRequestResponse(stored.getMessage()),
-						stored.getStatus() == null ? null : BypassConstants.valueOf(stored.getStatus()), stored.getInfoText(),
-						stored.getStatusCode(), stored.getResponseContentLength());
-				session.putRequestResponse(id, restored);
-				if (id > maxId) {
-					maxId = id;
+				HttpRequestResponse message = toHttpRequestResponse(stored.getMessage());
+				OriginalRequestResponse restored = new OriginalRequestResponse(stored.getId(), message, stored.getMethod(),
+						stored.getUrl(), stored.getInfoText(), stored.getStatusCode(), stored.getResponseContentLength());
+				restored.restoreViewState(stored.getComment(), stored.isMarked());
+				config.getTableModel().addNewRequestResponse(restored);
+				if (stored.getId() > maxId) {
+					maxId = stored.getId();
 				}
 			}
-		}
-		config.setMapId(maxId);
-		javax.swing.SwingUtilities.invokeLater(new Runnable() {
-			@Override
-			public void run() {
-				config.getTableModel().fireTableDataChanged();
+			for (Map.Entry<String, ArrayList<Integer>> entry : index.sessions.entrySet()) {
+				Session session = config.getSessionByName(entry.getKey());
+				if (session == null) {
+					BurpExtender.callbacks.printOutput("[AuthAnalyzer][restore-session] session not found: " + entry.getKey());
+					continue;
+				}
+				for (Integer id : entry.getValue()) {
+					if (!originalIds.contains(id)) {
+						BurpExtender.callbacks.printOutput("[AuthAnalyzer][restore-session] skip orphan session entry session="
+								+ entry.getKey() + " id=" + id + " because original id is not present in index.originalIds");
+						continue;
+					}
+					StoredAnalyzerRequestResponse stored = loadStoredSession(entry.getKey(), id);
+					BurpExtender.callbacks.printOutput(String.format(
+							"[AuthAnalyzer][restore-session] session=%s id=%d stored=%s message=%s",
+							entry.getKey(), id, stored == null ? "null" : "ok", (stored == null || stored.getMessage() == null) ? "null" : "ok"));
+					if (stored == null) {
+						continue;
+					}
+					AnalyzerRequestResponse restored = new AnalyzerRequestResponse(toHttpRequestResponse(stored.getMessage()),
+							stored.getStatus() == null ? null : BypassConstants.valueOf(stored.getStatus()), stored.getInfoText(),
+							stored.getStatusCode(), stored.getResponseContentLength());
+					session.putRequestResponse(id, restored);
+					if (id > maxId) {
+						maxId = id;
+					}
+				}
 			}
-		});
-		BurpExtender.callbacks.printOutput(String.format(
-				"[AuthAnalyzer][restore] done tableRows=%d maxId=%d",
-				config.getTableModel().getRowCount(), maxId));
+			config.setMapId(maxId);
+			javax.swing.SwingUtilities.invokeLater(new Runnable() {
+				@Override
+				public void run() {
+					config.getTableModel().fireTableDataChanged();
+				}
+			});
+			BurpExtender.callbacks.printOutput(String.format(
+					"[AuthAnalyzer][restore] done tableRows=%d maxId=%d",
+					config.getTableModel().getRowCount(), maxId));
+		}
 	}
 
 	public static void deleteStoredRequestResponse(int id) {
-		PersistedObject root = rootStorage();
-		PersistedObject originals = ensureChild(root, ORIGINALS_KEY);
-		PersistedObject sessions = ensureChild(root, SESSIONS_KEY);
-		originals.deleteString(String.valueOf(id));
-		StoredIndex index = loadIndex();
-		if (index == null) {
-			return;
-		}
-		index.originalIds.remove(Integer.valueOf(id));
-		for (String sessionName : new ArrayList<String>(index.sessions.keySet())) {
-			ArrayList<Integer> ids = index.sessions.get(sessionName);
-			ids.remove(Integer.valueOf(id));
-			PersistedObject sessionObject = sessions.getChildObject(sanitizePathSegment(sessionName));
-			if (sessionObject != null) {
-				sessionObject.deleteString(String.valueOf(id));
+		synchronized (STORAGE_LOCK) {
+			PersistedObject root = rootStorage();
+			PersistedObject originals = ensureChild(root, ORIGINALS_KEY);
+			PersistedObject sessions = ensureChild(root, SESSIONS_KEY);
+			originals.deleteString(String.valueOf(id));
+			StoredIndex index = loadIndex();
+			if (index == null) {
+				return;
 			}
-			if (ids.isEmpty()) {
-				index.sessions.remove(sessionName);
-				sessions.deleteChildObject(sanitizePathSegment(sessionName));
+			index.originalIds.remove(Integer.valueOf(id));
+			for (String sessionName : new ArrayList<String>(index.sessions.keySet())) {
+				ArrayList<Integer> ids = index.sessions.get(sessionName);
+				ids.remove(Integer.valueOf(id));
+				PersistedObject sessionObject = sessions.getChildObject(sanitizePathSegment(sessionName));
+				if (sessionObject != null) {
+					sessionObject.deleteString(String.valueOf(id));
+				}
+				if (ids.isEmpty()) {
+					index.sessions.remove(sessionName);
+					sessions.deleteChildObject(sanitizePathSegment(sessionName));
+				}
 			}
+			saveIndex(index);
+			BurpExtender.callbacks.printOutput("[AuthAnalyzer][delete-stored] id=" + id + " updatedIndex originalIds="
+					+ index.originalIds + " sessionNames=" + index.sessions.keySet());
 		}
-		saveIndex(index);
-		BurpExtender.callbacks.printOutput("[AuthAnalyzer][delete-stored] id=" + id + " updatedIndex originalIds="
-				+ index.originalIds + " sessionNames=" + index.sessions.keySet());
 	}
 
 	public static void clearStoredMessages() {
-		BurpExtender.callbacks.printOutput("[AuthAnalyzer][clear-stored] clearing ProjectData originals/sessions/index");
-		PersistedObject root = rootStorage();
-		root.deleteChildObject(ORIGINALS_KEY);
-		root.deleteChildObject(SESSIONS_KEY);
-		root.deleteString(INDEX_KEY);
+		synchronized (STORAGE_LOCK) {
+			BurpExtender.callbacks.printOutput("[AuthAnalyzer][clear-stored] clearing ProjectData originals/sessions/index");
+			PersistedObject root = rootStorage();
+			root.deleteChildObject(ORIGINALS_KEY);
+			root.deleteChildObject(SESSIONS_KEY);
+			root.deleteString(INDEX_KEY);
+		}
 	}
 
 	private static void saveOriginalRequestResponse(StoredOriginalRequestResponse stored) {
-		PersistedObject originals = ensureChild(rootStorage(), ORIGINALS_KEY);
-		storeJsonObject(originals, String.valueOf(stored.getId()), GSON.toJson(stored));
-		StoredIndex index = loadIndex();
-		if (!index.originalIds.contains(stored.getId())) {
-			index.originalIds.add(stored.getId());
-			Collections.sort(index.originalIds);
+		synchronized (STORAGE_LOCK) {
+			PersistedObject originals = ensureChild(rootStorage(), ORIGINALS_KEY);
+			storeJsonObject(originals, String.valueOf(stored.getId()), GSON.toJson(stored));
+			StoredIndex index = loadIndex();
+			if (!index.originalIds.contains(stored.getId())) {
+				index.originalIds.add(stored.getId());
+				Collections.sort(index.originalIds);
+			}
+			saveIndex(index);
 		}
-		saveIndex(index);
 	}
 
 	private static void saveSessionRequestResponse(String sessionName, int id, StoredAnalyzerRequestResponse stored) {
-		String key = String.valueOf(id);
-		String json = GSON.toJson(stored);
-		BurpExtender.callbacks.printOutput("[AuthAnalyzer][store-session-persist] session=" + sessionName + " id=" + id
-				+ " jsonLen=" + (json == null ? -1 : json.length()));
-		PersistedObject sessions = ensureChild(rootStorage(), SESSIONS_KEY);
-		PersistedObject sessionObject = ensureChild(sessions, sanitizePathSegment(sessionName));
-		storeJsonObject(sessionObject, key, json);
-		StoredIndex index = loadIndex();
-		ArrayList<Integer> ids = index.sessions.get(sessionName);
-		if (ids == null) {
-			ids = new ArrayList<Integer>();
-			index.sessions.put(sessionName, ids);
+		synchronized (STORAGE_LOCK) {
+			String key = String.valueOf(id);
+			String json = GSON.toJson(stored);
+			BurpExtender.callbacks.printOutput("[AuthAnalyzer][store-session-persist] session=" + sessionName + " id=" + id
+					+ " jsonLen=" + (json == null ? -1 : json.length()));
+			PersistedObject sessions = ensureChild(rootStorage(), SESSIONS_KEY);
+			PersistedObject sessionObject = ensureChild(sessions, sanitizePathSegment(sessionName));
+			storeJsonObject(sessionObject, key, json);
+			StoredIndex index = loadIndex();
+			ArrayList<Integer> ids = index.sessions.get(sessionName);
+			if (ids == null) {
+				ids = new ArrayList<Integer>();
+				index.sessions.put(sessionName, ids);
+			}
+			if (!ids.contains(id)) {
+				ids.add(id);
+				Collections.sort(ids);
+			}
+			saveIndex(index);
+			BurpExtender.callbacks.printOutput("[AuthAnalyzer][store-session-persist] session=" + sessionName + " id=" + id
+					+ " indexIds=" + ids);
 		}
-		if (!ids.contains(id)) {
-			ids.add(id);
-			Collections.sort(ids);
-		}
-		saveIndex(index);
-		BurpExtender.callbacks.printOutput("[AuthAnalyzer][store-session-persist] session=" + sessionName + " id=" + id
-				+ " indexIds=" + ids);
 	}
 
 	private static StoredOriginalRequestResponse loadStoredOriginal(int id) {
