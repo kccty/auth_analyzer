@@ -63,9 +63,9 @@ public class ConfigurationPanel extends JPanel {
 
 	private static final long serialVersionUID = -4278008236240529083L;
 	private final CurrentConfig config = CurrentConfig.getCurrentConfig();
-	private final String ANALYZER_STOPPED_TEXT = "<html><span style='color:red; font-weight: bold'>&#x26AB;</span> Analyzer Stopped</html>";
-	private final String ANALYZER_STARTED_TEXT = "<html><span style='color:green; font-weight: bold'>&#x26AB;</span> Analyzer Running</html>";
-	private final String ANALYZER_PAUSED_TEXT = "<html><span style='color:orange; font-weight: bold'>&#x26AB;</span> Analyzer Paused</html>";
+	private final String ANALYZER_STOPPED_TEXT = "<html><font color='#ff4d4f'>&#x25CF;</font> <span style='font-weight: bold'>Analyzer Stopped</span></html>";
+	private final String ANALYZER_STARTED_TEXT = "<html><font color='#22c55e'>&#x25CF;</font> <span style='font-weight: bold'>Analyzer Running</span></html>";
+	private final String ANALYZER_PAUSED_TEXT = "<html><font color='#f59e0b'>&#x25CF;</font> <span style='font-weight: bold'>Analyzer Paused</span></html>";
 	private final String DROP_REQUEST_TEXT = "Drop Original Requests";
 	private final String STOP_DROP_REQUEST_TEXT = "Stop Drop Requests";
 	private final JButton startStopButton = new JButton();
@@ -539,8 +539,7 @@ public class ConfigurationPanel extends JPanel {
 					}
 				}
 				if (success) {
-					boolean rebuildCenterPanel = sessionListChanged && config.getTableModel() != null
-							&& config.getTableModel().getRowCount() == 0;
+					boolean rebuildCenterPanel = sessionListChanged;
 					createSessionObjects(true);
 					// Auto Store
 					try {
@@ -556,9 +555,7 @@ public class ConfigurationPanel extends JPanel {
 					if(rebuildCenterPanel) {
 						mainPanel.getCenterPanel().initCenterPanel();
 					}
-					else {
-						mainPanel.getCenterPanel().refreshTableFilter();
-					}
+					mainPanel.getCenterPanel().refreshTableFilter();
 					sessionTabbedPane.setModifEnabled(false);
 					pauseButton.setEnabled(true);
 					dropOriginalButton.setEnabled(true);

@@ -24,8 +24,8 @@ public class StatusPanel extends JPanel{
 	private final JLabel headerRemoveLabel = new JLabel("<html><strong>Header(s) to Remove</strong></html>");
 	private final JLabel headerToRemoveValue = new JLabel("");
 	private final JLabel amountOfFilteredRequestsLabel = new JLabel("");
-	private final String SESSION_STARTED_TEXT = "<html><span style='color:green; font-weight: bold'>&#x26AB;</span> Session Running</html>";
-	private final String SESSION_PAUSED_TEXT = "<html><span style='color:orange; font-weight: bold'>&#x26AB;</span> Session Paused</html>";
+	private final String SESSION_STARTED_TEXT = "<html><font color='#22c55e'>&#x25CF;</font> <span style='font-weight: bold'>Session Running</span></html>";
+	private final String SESSION_PAUSED_TEXT = "<html><font color='#f59e0b'>&#x25CF;</font> <span style='font-weight: bold'>Session Paused</span></html>";
 	private boolean running = true;
 	private final HashMap<String, JLabel> tokenLabelMap = new HashMap<String, JLabel>();
 	private final HashMap<String, JButton> refreshButtonMap = new HashMap<String, JButton>();
