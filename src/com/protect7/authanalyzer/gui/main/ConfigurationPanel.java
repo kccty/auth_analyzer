@@ -63,9 +63,9 @@ public class ConfigurationPanel extends JPanel {
 
 	private static final long serialVersionUID = -4278008236240529083L;
 	private final CurrentConfig config = CurrentConfig.getCurrentConfig();
-	private final String ANALYZER_STOPPED_TEXT = "<html><font color='#ff4d4f' size='+2'>&#x25CF;</font> Analyzer Stopped</html>";
-	private final String ANALYZER_STARTED_TEXT = "<html><font color='#22c55e' size='+2'>&#x25CF;</font> Analyzer Running</html>";
-	private final String ANALYZER_PAUSED_TEXT = "<html><font color='#f59e0b' size='+2'>&#x25CF;</font> Analyzer Paused</html>";
+	private final String ANALYZER_STOPPED_TEXT = "<html><span style='color:#ff4d4f; font-size:18px; vertical-align:middle;'>&#x2022;</span>&nbsp;Analyzer Stopped</html>";
+	private final String ANALYZER_STARTED_TEXT = "<html><span style='color:#22c55e; font-size:18px; vertical-align:middle;'>&#x2022;</span>&nbsp;Analyzer Running</html>";
+	private final String ANALYZER_PAUSED_TEXT = "<html><span style='color:#f59e0b; font-size:18px; vertical-align:middle;'>&#x2022;</span>&nbsp;Analyzer Paused</html>";
 	private final String DROP_REQUEST_TEXT = "Drop Original Requests";
 	private final String STOP_DROP_REQUEST_TEXT = "Stop Drop Requests";
 	private final JButton startStopButton = new JButton();
